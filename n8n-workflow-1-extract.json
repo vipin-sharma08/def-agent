@@ -1,0 +1,143 @@
+{
+  "name": "DCF - 1. Extract Financial Data from PDF",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dcf-upload",
+        "options": {
+          "binaryData": true
+        },
+        "responseMode": "lastNode",
+        "responseData": "allEntries"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Webhook - Receive PDF",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "dcf-upload-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Extract financial data from this annual report PDF. Return ONLY a raw JSON object (no markdown, no code fences) with this exact schema:\\n{\\n  \\\"companyName\\\": string,\\n  \\\"reportYear\\\": number,\\n  \\\"currency\\\": string,\\n  \\\"revenue\\\": number[],\\n  \\\"ebit\\\": number[],\\n  \\\"depreciation\\\": number[],\\n  \\\"amortization\\\": number[],\\n  \\\"interestExpense\\\": number[],\\n  \\\"taxRate\\\": number,\\n  \\\"totalAssets\\\": number[],\\n  \\\"totalDebt\\\": number[],\\n  \\\"cashAndEquivalents\\\": number[],\\n  \\\"workingCapital\\\": number[],\\n  \\\"operatingCashFlow\\\": number[],\\n  \\\"capex\\\": number[],\\n  \\\"freeCashFlow\\\": number[],\\n  \\\"sharesOutstanding\\\": number\\n}\\nAll array fields = historical values oldest-first (up to 5 years). Numbers in actual currency units (not millions).\"\n        },\n        {\n          \"inline_data\": {\n            \"mime_type\": \"application/pdf\",\n            \"data\": \"={{ $binary.data.data }}\"\n          }\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"temperature\": 0,\n    \"maxOutputTokens\": 4096\n  }\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Google Gemini - Extract Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.candidates[0].content.parts[0].text;\nconst cleaned = raw.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\nconst financialData = JSON.parse(cleaned);\n\n// Attach requester email from webhook body if sent\nconst webhookBody = $('Webhook - Receive PDF').first().json.body || {};\nfinancialData._requesterEmail = webhookBody.email || '';\nfinancialData._uploadedAt = new Date().toISOString();\n\nreturn [{ json: financialData }];"
+      },
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "Code - Parse Gemini Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "RawData",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-0004-0004-000000000004",
+      "name": "Google Sheets - Store Raw Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [960, 300],
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_BASE_URL }}/webhook/dcf-calculate",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-0005-0005-000000000005",
+      "name": "HTTP - Trigger Workflow 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Receive PDF": {
+      "main": [
+        [{ "node": "Google Gemini - Extract Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Gemini - Extract Data": {
+      "main": [
+        [{ "node": "Code - Parse Gemini Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code - Parse Gemini Response": {
+      "main": [
+        [{ "node": "Google Sheets - Store Raw Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Sheets - Store Raw Data": {
+      "main": [
+        [{ "node": "HTTP - Trigger Workflow 2", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a1b2c3d4-aaaa-bbbb-cccc-000000000001",
+  "meta": {
+    "templateCreatedBy": "Valkyrie DCF Agent"
+  },
+  "id": "dcf-workflow-001",
+  "tags": [{ "name": "DCF" }, { "name": "Finance" }]
+}

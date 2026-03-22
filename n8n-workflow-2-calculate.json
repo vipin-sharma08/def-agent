@@ -1,0 +1,142 @@
+{
+  "name": "DCF - 2. Calculate & Deliver Report",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dcf-calculate",
+        "responseMode": "lastNode",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "id": "b1c2d3e4-0001-0001-0001-000000000001",
+      "name": "Webhook - Receive Financial Data",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "dcf-calculate-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\n\n// ── Default DCF assumptions (override via webhook body if provided) ──\nconst assumptions = {\n  projectionYears:                          d.projectionYears                          || 5,\n  revenueGrowthRate:                        d.revenueGrowthRate                        || 12,\n  ebitMargin:                               d.ebitMargin                               || 15,\n  taxRate:                                  d.taxRate                                  || 25,\n  capexAsPercentRevenue:                    d.capexAsPercentRevenue                    || 5,\n  workingCapitalChangeAsPercentRevenue:     d.workingCapitalChangeAsPercentRevenue     || 2,\n  wacc:                                     d.wacc                                     || 12,\n  terminalGrowthRate:                       d.terminalGrowthRate                       || 4,\n};\n\nconst netDebt =\n  (d.totalDebt?.[d.totalDebt.length - 1]         || 0) -\n  (d.cashAndEquivalents?.[d.cashAndEquivalents.length - 1] || 0);\n\nconst sharesOutstanding = d.sharesOutstanding || 1;\n\n// ── Projections ──\nconst projections = [];\nlet revenue = d.revenue?.[d.revenue.length - 1] || 0;\n\nfor (let i = 1; i <= assumptions.projectionYears; i++) {\n  revenue = revenue * (1 + assumptions.revenueGrowthRate / 100);\n  const ebit        = revenue * (assumptions.ebitMargin / 100);\n  const nopat       = ebit * (1 - assumptions.taxRate / 100);\n  const depreciation = revenue * 0.03;\n  const capex       = revenue * (assumptions.capexAsPercentRevenue / 100);\n  const wcChange    = revenue * (assumptions.workingCapitalChangeAsPercentRevenue / 100);\n  const fcf         = nopat + depreciation - capex - wcChange;\n  const df          = Math.pow(1 + assumptions.wacc / 100, i);\n\n  projections.push({\n    year:                  new Date().getFullYear() + i,\n    revenue:               Math.round(revenue),\n    ebit:                  Math.round(ebit),\n    nopat:                 Math.round(nopat),\n    depreciation:          Math.round(depreciation),\n    capex:                 Math.round(capex),\n    workingCapitalChange:  Math.round(wcChange),\n    freeCashFlow:          Math.round(fcf),\n    discountFactor:        parseFloat(df.toFixed(4)),\n    presentValue:          Math.round(fcf / df),\n  });\n}\n\nconst sumPV      = projections.reduce((s, p) => s + p.presentValue, 0);\nconst lastFCF    = projections[projections.length - 1].freeCashFlow;\nconst tv         = lastFCF * (1 + assumptions.terminalGrowthRate / 100) /\n                   ((assumptions.wacc - assumptions.terminalGrowthRate) / 100);\nconst pvTV       = Math.round(tv / Math.pow(1 + assumptions.wacc / 100, assumptions.projectionYears));\nconst ev         = Math.round(sumPV + pvTV);\nconst equity     = Math.round(ev - netDebt);\nconst ivps       = parseFloat((equity / sharesOutstanding).toFixed(2));\n\nreturn [{\n  json: {\n    // metadata\n    companyName:              d.companyName,\n    reportYear:               d.reportYear,\n    currency:                 d.currency || 'INR',\n    _requesterEmail:          d._requesterEmail || '',\n    _uploadedAt:              d._uploadedAt,\n    _calculatedAt:            new Date().toISOString(),\n    // assumptions used\n    assumptions,\n    // results\n    projections,\n    terminalValue:            Math.round(tv),\n    presentValueTerminalValue: pvTV,\n    sumPVFreeCashFlows:       Math.round(sumPV),\n    enterpriseValue:          ev,\n    netDebt:                  Math.round(netDebt),\n    equityValue:              equity,\n    sharesOutstanding,\n    intrinsicValuePerShare:   ivps,\n  }\n}];"
+      },
+      "id": "b1c2d3e4-0002-0002-0002-000000000002",
+      "name": "Code - Run DCF Calculation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "DCFResults",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mappingValues": [
+              { "fieldId": "Company",                   "fieldValue": "={{ $json.companyName }}" },
+              { "fieldId": "Report Year",               "fieldValue": "={{ $json.reportYear }}" },
+              { "fieldId": "Currency",                  "fieldValue": "={{ $json.currency }}" },
+              { "fieldId": "Enterprise Value",          "fieldValue": "={{ $json.enterpriseValue }}" },
+              { "fieldId": "Equity Value",              "fieldValue": "={{ $json.equityValue }}" },
+              { "fieldId": "Intrinsic Value Per Share", "fieldValue": "={{ $json.intrinsicValuePerShare }}" },
+              { "fieldId": "WACC (%)",                  "fieldValue": "={{ $json.assumptions.wacc }}" },
+              { "fieldId": "Terminal Growth Rate (%)",  "fieldValue": "={{ $json.assumptions.terminalGrowthRate }}" },
+              { "fieldId": "Projection Years",         "fieldValue": "={{ $json.assumptions.projectionYears }}" },
+              { "fieldId": "Sum PV FCFs",              "fieldValue": "={{ $json.sumPVFreeCashFlows }}" },
+              { "fieldId": "PV Terminal Value",        "fieldValue": "={{ $json.presentValueTerminalValue }}" },
+              { "fieldId": "Net Debt",                 "fieldValue": "={{ $json.netDebt }}" },
+              { "fieldId": "Calculated At",            "fieldValue": "={{ $json._calculatedAt }}" }
+            ]
+          }
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-0003-0003-0003-000000000003",
+      "name": "Google Sheets - Write DCF Results",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [720, 300],
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json._requesterEmail }}",
+        "subject": "=DCF Report: {{ $json.companyName }} ({{ $json.reportYear }})",
+        "emailType": "html",
+        "message": "=<h2>Valkyrie DCF Report — {{ $json.companyName }}</h2>\n<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse;font-family:sans-serif\">\n  <tr><td><b>Report Year</b></td><td>{{ $json.reportYear }}</td></tr>\n  <tr><td><b>Currency</b></td><td>{{ $json.currency }}</td></tr>\n  <tr><td><b>Intrinsic Value / Share</b></td><td><b>{{ $json.currency }} {{ $json.intrinsicValuePerShare }}</b></td></tr>\n  <tr><td><b>Enterprise Value</b></td><td>{{ $json.currency }} {{ $json.enterpriseValue.toLocaleString() }}</td></tr>\n  <tr><td><b>Equity Value</b></td><td>{{ $json.currency }} {{ $json.equityValue.toLocaleString() }}</td></tr>\n  <tr><td><b>Net Debt</b></td><td>{{ $json.currency }} {{ $json.netDebt.toLocaleString() }}</td></tr>\n  <tr><td><b>PV of FCFs</b></td><td>{{ $json.currency }} {{ $json.sumPVFreeCashFlows.toLocaleString() }}</td></tr>\n  <tr><td><b>PV of Terminal Value</b></td><td>{{ $json.currency }} {{ $json.presentValueTerminalValue.toLocaleString() }}</td></tr>\n  <tr><td><b>WACC</b></td><td>{{ $json.assumptions.wacc }}%</td></tr>\n  <tr><td><b>Terminal Growth Rate</b></td><td>{{ $json.assumptions.terminalGrowthRate }}%</td></tr>\n  <tr><td><b>Revenue Growth Rate</b></td><td>{{ $json.assumptions.revenueGrowthRate }}%</td></tr>\n  <tr><td><b>EBIT Margin</b></td><td>{{ $json.assumptions.ebitMargin }}%</td></tr>\n</table>\n<br/>\n<p style=\"color:#888;font-size:12px\">Generated by Valkyrie DCF Agent · {{ $json._calculatedAt }}</p>",
+        "options": {}
+      },
+      "id": "b1c2d3e4-0004-0004-0004-000000000004",
+      "name": "Gmail - Send DCF Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [960, 300],
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"company\": \"{{ $('Code - Run DCF Calculation').first().json.companyName }}\",\n  \"intrinsicValuePerShare\": {{ $('Code - Run DCF Calculation').first().json.intrinsicValuePerShare }},\n  \"enterpriseValue\": {{ $('Code - Run DCF Calculation').first().json.enterpriseValue }}\n}",
+        "options": {}
+      },
+      "id": "b1c2d3e4-0005-0005-0005-000000000005",
+      "name": "Respond - Return Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Receive Financial Data": {
+      "main": [
+        [{ "node": "Code - Run DCF Calculation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code - Run DCF Calculation": {
+      "main": [
+        [{ "node": "Google Sheets - Write DCF Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Sheets - Write DCF Results": {
+      "main": [
+        [{ "node": "Gmail - Send DCF Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gmail - Send DCF Report": {
+      "main": [
+        [{ "node": "Respond - Return Result", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b1c2d3e4-aaaa-bbbb-cccc-000000000002",
+  "meta": {
+    "templateCreatedBy": "Valkyrie DCF Agent"
+  },
+  "id": "dcf-workflow-002",
+  "tags": [{ "name": "DCF" }, { "name": "Finance" }]
+}

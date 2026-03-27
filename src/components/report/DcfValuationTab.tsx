@@ -128,7 +128,7 @@ const PanelRow = ({
     <span
       className={`font-number text-sm ${
         isTotal
-          ? "font-bold text-teal"
+          ? "font-semibold text-teal"
           : isSub
           ? "text-negative"
           : mono
@@ -142,7 +142,7 @@ const PanelRow = ({
 );
 
 const SectionHeader = ({ title }: { title: string }) => (
-  <p className="text-[10px] font-mono font-bold tracking-[0.18em] text-zinc-600 uppercase mt-5 mb-2 border-b border-border pb-1">
+  <p className="text-[10px] font-mono font-semibold tracking-[0.18em] text-zinc-600 uppercase mt-5 mb-2 border-b border-border pb-1">
     {title}
   </p>
 );
@@ -159,7 +159,7 @@ export const DcfValuationTab = ({ dcf }: Props) => {
     <div className="space-y-0">
       {/* ── FCFF Schedule ── */}
       <div className="p-0">
-        <div className="px-4 pt-4 pb-2 text-[10px] font-mono font-bold tracking-[0.18em] text-zinc-600 uppercase">
+        <div className="px-4 pt-4 pb-2 text-[10px] font-mono font-semibold tracking-[0.18em] text-zinc-600 uppercase">
           FCFF Schedule (₹ Crores)
         </div>
         <ReportTable years={fcffYears} columnTypes={columnTypes} rows={fcffRows} />
@@ -175,7 +175,7 @@ export const DcfValuationTab = ({ dcf }: Props) => {
 
         {/* WACC Bridge */}
         <div className="p-6">
-          <p className="text-[10px] font-mono font-bold tracking-[0.18em] text-zinc-600 uppercase mb-1">
+          <p className="text-[10px] font-mono font-semibold tracking-[0.18em] text-zinc-600 uppercase mb-1">
             WACC Derivation
           </p>
 
@@ -201,7 +201,7 @@ export const DcfValuationTab = ({ dcf }: Props) => {
 
           <div className="mt-4 bg-teal-surface border border-teal-border rounded-lg p-4 text-center">
             <p className="text-[9px] font-mono text-teal/70 uppercase tracking-widest mb-1">WACC</p>
-            <p className="font-number text-3xl font-bold text-teal">{fmtPct(wacc.wacc)}</p>
+            <p className="font-number text-3xl font-semibold text-teal">{fmtPct(wacc.wacc)}</p>
             <p className="text-[10px] font-mono text-zinc-600 mt-1">
               Ke × E% + Kd(net) × D%
             </p>
@@ -210,7 +210,7 @@ export const DcfValuationTab = ({ dcf }: Props) => {
 
         {/* Terminal Value */}
         <div className="p-6">
-          <p className="text-[10px] font-mono font-bold tracking-[0.18em] text-zinc-600 uppercase mb-1">
+          <p className="text-[10px] font-mono font-semibold tracking-[0.18em] text-zinc-600 uppercase mb-1">
             Terminal Value (Gordon Growth)
           </p>
 
@@ -248,7 +248,7 @@ export const DcfValuationTab = ({ dcf }: Props) => {
 
         {/* Equity Value Bridge */}
         <div className="p-6">
-          <p className="text-[10px] font-mono font-bold tracking-[0.18em] text-zinc-600 uppercase mb-1">
+          <p className="text-[10px] font-mono font-semibold tracking-[0.18em] text-zinc-600 uppercase mb-1">
             Equity Value Bridge
           </p>
 
@@ -268,7 +268,7 @@ export const DcfValuationTab = ({ dcf }: Props) => {
             <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest mb-1">
               Intrinsic Value per Share
             </p>
-            <p className="font-number text-3xl font-bold text-teal">
+            <p className="font-number text-3xl font-semibold text-teal">
               {fmtShare(dcf.per_share_value)}
             </p>
             {dcf.current_market_price != null && dcf.upside_downside_pct != null && (
@@ -277,7 +277,7 @@ export const DcfValuationTab = ({ dcf }: Props) => {
                   CMP: {fmtShare(dcf.current_market_price)}
                 </p>
                 <p
-                  className={`font-number text-sm font-bold mt-0.5 ${
+                  className={`font-number text-sm font-semibold mt-0.5 ${
                     dcf.upside_downside_pct >= 0 ? "text-teal" : "text-negative"
                   }`}
                 >

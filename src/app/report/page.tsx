@@ -8,7 +8,7 @@
 // Schedules | DCF Valuation | Sensitivity
 // ═══════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -24,6 +24,7 @@ import {
   GitFork,
   Activity,
   Download,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import { useValkyrie }        from "@/lib/store";
@@ -31,12 +32,14 @@ import { Button }             from "@/components/ui/button";
 import { WarningBanner }      from "@/components/ui/WarningBanner";
 import { TableSkeleton }      from "@/components/ui/LoadingSkeleton";
 import { ValuationSummaryCard } from "@/components/report/ValuationSummaryCard";
+import { StepIndicator } from "@/components/ui/StepIndicator";
 import { IncomeStatementTab }   from "@/components/report/IncomeStatementTab";
 import { BalanceSheetTab }      from "@/components/report/BalanceSheetTab";
 import { CashFlowTab }          from "@/components/report/CashFlowTab";
 import { SchedulesTab }         from "@/components/report/SchedulesTab";
 import { DcfValuationTab }      from "@/components/report/DcfValuationTab";
 import { SensitivityTab }       from "@/components/report/SensitivityTab";
+import { normalizeFinancialModelYears } from "@/lib/normalizeModelYears";
 import type { FinancialModel }  from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -50,6 +53,20 @@ type ReportTab =
   | "sensitivity";
 
 type GenState = "idle" | "loading" | "error";
+
+function unwrapModelResponse(raw: unknown): FinancialModel {
+  if (Array.isArray(raw)) {
+    const first = raw[0] as Record<string, unknown> | undefined;
+    return ((first?.modelData ?? first?.model_data ?? first) ?? {}) as FinancialModel;
+  }
+
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    return ((obj.modelData ?? obj.model_data ?? obj) ?? {}) as FinancialModel;
+  }
+
+  return {} as FinancialModel;
+}
 
 // ─── Tab config ────────────────────────────────────────────────────
 
@@ -68,8 +85,8 @@ const AuditBadge = ({ ok, label }: { ok: boolean; label: string }) => (
   <span
     className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full ${
       ok
-        ? "bg-teal-surface border border-teal-border text-teal"
-        : "bg-neg-surface border border-neg-border text-negative"
+        ? "bg-profit border border-profit text-profit"
+        : "bg-loss border border-loss text-loss"
     }`}
   >
     <span>{ok ? "✓" : "✗"}</span>
@@ -82,17 +99,17 @@ const AuditBadge = ({ ok, label }: { ok: boolean; label: string }) => (
 const LoadingScreen = ({ message }: { message: string }) => (
   <div className="flex flex-col items-center justify-center min-h-[50vh] gap-5">
     <div className="relative">
-      <div className="w-16 h-16 rounded-full border-2 border-border flex items-center justify-center">
-        <BarChart3 size={24} className="text-zinc-600" />
+      <div className="w-16 h-16 rounded-full border-2 border-subtle flex items-center justify-center">
+        <BarChart3 size={24} className="text-muted" />
       </div>
       <Loader2
         size={20}
-        className="absolute -top-1 -right-1 text-teal animate-spin"
+        className="absolute -top-1 -right-1 text-accent animate-spin"
       />
     </div>
     <div className="text-center">
-      <p className="text-sm font-semibold text-zinc-100 mb-1">{message}</p>
-      <p className="text-xs text-zinc-500 max-w-sm">
+      <p className="text-dense font-semibold text-primary mb-1">{message}</p>
+      <p className="text-caption text-muted max-w-sm">
         Building integrated 3-statement model, running FCFF projections,
         computing WACC, and generating sensitivity analysis…
       </p>
@@ -102,7 +119,7 @@ const LoadingScreen = ({ message }: { message: string }) => (
         (step, i) => (
           <span
             key={step}
-            className="text-[10px] font-mono text-zinc-500 px-2 py-1 border border-border rounded animate-pulse"
+            className="text-[10px] font-mono text-muted px-2 py-1 border border-subtle rounded animate-pulse"
             style={{ animationDelay: `${i * 0.2}s` }}
           >
             {step}
@@ -122,16 +139,14 @@ export default function ReportPage() {
     userAssumptions,
     financialModel,
     setFinancialModel,
-    setLoading,
-    setError,
-    error,
   } = useValkyrie();
 
   const [activeTab,    setActiveTab]    = useState<ReportTab>("income");
   const [genState,     setGenState]     = useState<GenState>("idle");
   const [genError,     setGenError]     = useState<string | null>(null);
-  const [isExporting,  setIsExporting]  = useState(false);
+  const [exportFormat, setExportFormat] = useState<"pdf" | "excel" | null>(null);
   const exportingRef = useRef(false);
+  const isExporting = exportFormat === "pdf";
 
   // ── Auto-generate on mount if model not ready ──
   const generateModel = useCallback(async () => {
@@ -149,13 +164,14 @@ export default function ReportPage() {
         }),
       });
 
-      const json = (await res.json()) as FinancialModel & { error?: string };
-
-      if (!res.ok || json.error) {
-        throw new Error(json.error ?? `Server error ${res.status}`);
+      const raw = (await res.json()) as unknown;
+      const maybeErr = raw as { error?: string };
+      if (!res.ok || maybeErr.error) {
+        throw new Error(maybeErr.error ?? `Server error ${res.status}`);
       }
 
-      setFinancialModel(json);
+      const model = unwrapModelResponse(raw);
+      setFinancialModel(normalizeFinancialModelYears(model, extractedData));
       setGenState("idle");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -170,52 +186,64 @@ export default function ReportPage() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const normalizedModel = useMemo(() => {
+    if (!financialModel || !extractedData) {
+      return null;
+    }
+
+    return normalizeFinancialModelYears(financialModel, extractedData);
+  }, [financialModel, extractedData]);
+
   const handleExport = useCallback(async () => {
-    if (!extractedData || !financialModel || exportingRef.current) return;
+    if (!extractedData || !normalizedModel || exportingRef.current) return;
     exportingRef.current = true;
-    setIsExporting(true);
+    setExportFormat("pdf");
     try {
       const { exportValuationPdf } = await import("@/lib/exportPdf");
-      await exportValuationPdf(extractedData, financialModel);
+      await exportValuationPdf(extractedData, normalizedModel);
     } finally {
       exportingRef.current = false;
-      setIsExporting(false);
+      setExportFormat(null);
     }
-  }, [extractedData, financialModel]);
+  }, [extractedData, normalizedModel]);
+
+  const handleExcelExport = useCallback(async () => {
+    if (!extractedData || !normalizedModel || exportingRef.current) return;
+    exportingRef.current = true;
+    setExportFormat("excel");
+    try {
+      const { exportValuationExcel } = await import("@/lib/exportExcel");
+      await exportValuationExcel(extractedData, normalizedModel);
+    } finally {
+      exportingRef.current = false;
+      setExportFormat(null);
+    }
+  }, [extractedData, normalizedModel]);
 
   // ── No prerequisites ──
   if (!extractedData || !userAssumptions) {
     return (
-      <div className="px-8 py-12 max-w-5xl mx-auto">
+      <div className="mx-auto max-w-5xl px-4 py-8 xl:px-0">
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-md bg-elevated border border-border">
-              <BarChart3 size={18} className="text-teal" />
-            </div>
-            <span className="text-xs font-mono text-zinc-500 tracking-widest uppercase">
-              Step 4 of 4
-            </span>
-          </div>
-          <h1 className="font-sans text-3xl font-bold text-zinc-100 mb-2">
-            DCF Valuation Report
-          </h1>
+          <StepIndicator icon={BarChart3} step={4} />
+          <h1 className="mt-4 text-display text-primary">DCF Valuation Report</h1>
         </div>
 
-        <div className="card p-12 flex flex-col items-center justify-center text-center">
-          <div className="p-4 rounded-full bg-elevated border border-border mb-5">
-            <AlertCircle size={28} className="text-zinc-500" />
+        <div className="card flex flex-col items-center justify-center p-10 text-center">
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-[var(--valk-radius-lg)] border border-subtle bg-surface-alt">
+            <AlertCircle size={28} className="text-muted" />
           </div>
-          <h2 className="text-base font-semibold text-zinc-400 mb-2">
+          <h2 className="mb-2 text-title text-primary">
             Complete earlier steps first
           </h2>
-          <p className="text-sm text-zinc-600 max-w-sm leading-relaxed mb-6">
+          <p className="mb-6 max-w-sm text-body text-secondary">
             You need to upload a PDF, review the extracted data, and configure
             assumptions before generating the valuation report.
           </p>
           <Button
             variant="outline"
             onClick={() => router.push("/")}
-            className="gap-2 bg-elevated border-border text-zinc-400 hover:text-zinc-100"
+            className="gap-2"
             aria-label="Go back to upload step"
           >
             <ArrowLeft size={15} />
@@ -227,22 +255,15 @@ export default function ReportPage() {
   }
 
   // ── Loading state ──
-  if (genState === "loading" || (!financialModel && genState !== "error")) {
+  if (genState === "loading" || (!normalizedModel && genState !== "error")) {
     return (
-      <div className="px-8 py-12 max-w-5xl mx-auto">
+      <div className="mx-auto max-w-5xl px-4 py-8 xl:px-0">
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-md bg-elevated border border-border">
-              <BarChart3 size={18} className="text-teal" />
-            </div>
-            <span className="text-xs font-mono text-zinc-500 tracking-widest uppercase">
-              Step 4 of 4
-            </span>
+          <div className="mb-3">
+            <StepIndicator icon={BarChart3} step={4} />
           </div>
-          <h1 className="font-sans text-3xl font-bold text-zinc-100 mb-1">
-            Generating DCF Model
-          </h1>
-          <p className="text-zinc-400 text-sm">
+          <h1 className="text-display text-primary">Generating DCF Model</h1>
+          <p className="mt-2 text-body text-secondary">
             {extractedData.metadata.company_name} ·{" "}
             {extractedData.metadata.industry}
           </p>
@@ -258,29 +279,25 @@ export default function ReportPage() {
   }
 
   // ── Error state ──
-  if (genState === "error" || (!financialModel && genError)) {
+  if (genState === "error" || (!normalizedModel && genError)) {
     return (
-      <div className="px-8 py-12 max-w-5xl mx-auto">
+      <div className="mx-auto max-w-5xl px-4 py-8 xl:px-0">
         <div className="mb-8">
-          <h1 className="font-sans text-3xl font-bold text-zinc-100 mb-1">
-            Model Generation Failed
-          </h1>
+          <h1 className="text-display text-primary">Model Generation Failed</h1>
         </div>
         <div className="card p-10 flex flex-col items-center text-center">
           <div className="p-4 rounded-full bg-neg-surface border border-neg-border mb-5">
             <AlertCircle size={28} className="text-negative" />
           </div>
-          <h2 className="text-base font-semibold text-negative/80 mb-2">
-            Could not generate model
-          </h2>
-          <p className="text-sm text-zinc-600 max-w-md leading-relaxed mb-6">
+          <h2 className="mb-2 text-title text-negative">Could not generate model</h2>
+          <p className="mb-6 max-w-md text-body text-secondary">
             {genError ?? "Unknown error occurred during model generation."}
           </p>
           <div className="flex gap-3">
             <Button
               variant="outline"
               onClick={() => router.push("/assumptions")}
-              className="gap-2 text-zinc-400 border-border hover:text-zinc-100"
+              className="gap-2"
               aria-label="Back to assumptions"
             >
               <ArrowLeft size={15} />
@@ -288,7 +305,7 @@ export default function ReportPage() {
             </Button>
             <Button
               onClick={generateModel}
-              className="gap-2 bg-teal hover:bg-teal/90 text-[#0A0A0A] glow-teal"
+              className="gap-2"
               aria-label="Retry model generation"
             >
               <RefreshCw size={14} />
@@ -301,40 +318,31 @@ export default function ReportPage() {
   }
 
   // ── Full report ──
-  const model = financialModel!;
+  const model = normalizedModel!;
   const meta  = extractedData.metadata;
-  const audit = model.model_audit;
+  const audit = model.model_audit ?? {
+    balance_sheet_balances_all_years: false,
+    cash_flow_ties_all_years: false,
+    no_circular_references: false,
+    warnings: ["Model audit data is missing from API response."],
+  };
 
   return (
     <div className="pb-12">
       {/* ── Page header ── */}
-      <div className="px-8 pt-8 pb-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="p-2 rounded-md bg-elevated border border-border">
-            <BarChart3 size={18} className="text-teal" />
-          </div>
-          <span className="text-xs font-mono text-zinc-500 tracking-widest uppercase">
-            Step 4 of 4 · DCF Report
-          </span>
-          <div className="flex items-center gap-2 ml-2">
+      <div className="px-4 pb-4 pt-8 xl:px-0">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <StepIndicator icon={BarChart3} step={4} />
+          <div className="ml-0 flex items-center gap-2 xl:ml-2">
             <AuditBadge ok={audit.balance_sheet_balances_all_years} label="BS Balances" />
             <AuditBadge ok={audit.cash_flow_ties_all_years}         label="CF Ties" />
             <AuditBadge ok={audit.no_circular_references}           label="No Circulars" />
           </div>
         </div>
 
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-sans text-2xl font-bold text-zinc-100">
-              DCF Valuation Report
-            </h1>
-            {audit.warnings.length > 0 && (
-              <div className="flex flex-col gap-1.5 mt-2">
-                {audit.warnings.map((w, i) => (
-                  <WarningBanner key={i} variant="warning" message={w} />
-                ))}
-              </div>
-            )}
+            <h1 className="text-display text-primary">DCF Valuation Report</h1>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -342,20 +350,43 @@ export default function ReportPage() {
               variant="outline"
               size="sm"
               onClick={() => router.push("/assumptions")}
-              className="gap-1.5 text-xs font-mono text-zinc-500 border-border hover:text-zinc-300 hover:border-zinc-600"
+              className="gap-1.5"
               aria-label="Edit assumptions"
             >
               <ArrowLeft size={12} />
               Edit Assumptions
             </Button>
             <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExcelExport}
+              disabled={exportFormat !== null}
+              className="gap-1.5"
+              aria-label={
+                exportFormat === "excel"
+                  ? "Generating Excel workbook"
+                  : "Download valuation report as Excel workbook"
+              }
+            >
+              {exportFormat === "excel" ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <FileSpreadsheet size={12} />
+              )}
+              {exportFormat === "excel" ? "Generating..." : "Download Excel"}
+            </Button>
+            <Button
               size="sm"
               onClick={handleExport}
-              disabled={isExporting}
-              className="gap-1.5 text-xs font-mono bg-teal-surface border border-teal-border text-teal hover:bg-teal/10 hover:border-teal/40"
-              aria-label={isExporting ? "Generating PDF" : "Download valuation report as PDF"}
+              disabled={exportFormat !== null}
+              className="gap-1.5 border border-accent bg-accent-muted text-accent hover:bg-accent-muted"
+              aria-label={
+                exportFormat === "pdf"
+                  ? "Generating PDF"
+                  : "Download valuation report as PDF"
+              }
             >
-              {isExporting
+              {exportFormat === "pdf"
                 ? <Loader2 size={12} className="animate-spin" />
                 : <Download size={12} />}
               {isExporting ? "Generating…" : "Download Report"}
@@ -365,7 +396,7 @@ export default function ReportPage() {
       </div>
 
       {/* ── Valuation summary hero ── */}
-      <div className="px-8 pb-5">
+      <div className="px-4 pb-5 xl:px-0">
         <ValuationSummaryCard
           dcf={model.dcf_valuation}
           meta={meta}
@@ -384,8 +415,8 @@ export default function ReportPage() {
       </div>
 
       {/* ── Tab navigation ── */}
-      <div className="px-8">
-        <div role="tablist" aria-label="Report sections" className="flex gap-0.5 border-b border-border overflow-x-auto scrollbar-thin">
+      <div className="px-4 xl:px-0">
+        <div role="tablist" aria-label="Report sections" className="flex gap-1 border-b border-subtle overflow-x-auto scrollbar-thin">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -393,10 +424,10 @@ export default function ReportPage() {
               aria-selected={activeTab === tab.id}
               aria-controls={`tabpanel-${tab.id}`}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-mono font-medium tracking-wide whitespace-nowrap transition-colors -mb-px focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal ${
+              className={`relative -mb-px inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-3 text-dense font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
                 activeTab === tab.id
-                  ? "text-teal"
-                  : "text-zinc-600 hover:text-zinc-400"
+                  ? "border-b border-accent text-accent"
+                  : "text-muted hover:text-primary"
               }`}
             >
               {tab.icon}
@@ -404,7 +435,7 @@ export default function ReportPage() {
               {activeTab === tab.id && (
                 <motion.div
                   layoutId="tab-underline-report"
-                  className="absolute bottom-0 left-0 right-0 h-px bg-teal"
+                  className="absolute bottom-0 left-0 right-0 h-px bg-accent"
                   transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                 />
               )}
@@ -414,7 +445,7 @@ export default function ReportPage() {
       </div>
 
       {/* ── Tab content ── */}
-      <div className="px-8 mt-0">
+      <div className="mt-0 px-4 xl:px-0">
         <div className="card rounded-tl-none overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
@@ -469,20 +500,20 @@ export default function ReportPage() {
       </div>
 
       {/* ── Scenarios footer ── */}
-      <div className="px-8 mt-5">
-        <div className="grid grid-cols-3 gap-4">
+      <div className="mt-5 px-4 xl:px-0">
+        <div className="grid gap-4 md:grid-cols-3">
           {(
             [
               {
                 label: "Bear Case",
                 data: model.scenarios.bear_case,
-                color: "rose",
+                color: "loss",
                 desc: model.scenarios.bear_case.assumptions_changed,
               },
               {
                 label: "Base Case",
                 data: model.scenarios.base_case,
-                color: "teal",
+                color: "accent",
                 desc: "Current assumptions",
               },
               {
@@ -502,21 +533,21 @@ export default function ReportPage() {
               <div
                 key={s.label}
                 className={`card-elevated rounded-lg p-4 border ${
-                  s.color === "teal"
-                    ? "border-teal-border"
-                    : s.color === "rose"
-                    ? "border-neg-border"
-                    : "border-border"
+                  s.color === "accent"
+                    ? "border-accent"
+                    : s.color === "loss"
+                    ? "border-loss"
+                    : "border-subtle"
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-caption uppercase tracking-label text-muted">
                     {s.label}
                   </span>
                   {upside != null && (
                     <span
-                      className={`text-[10px] font-mono font-semibold ${
-                        upside >= 0 ? "text-teal" : "text-negative"
+                      className={`text-caption font-medium ${
+                        upside >= 0 ? "text-profit" : "text-loss"
                       }`}
                     >
                       {upside >= 0 ? "+" : ""}{upside.toFixed(1)}%
@@ -524,12 +555,12 @@ export default function ReportPage() {
                   )}
                 </div>
                 <p
-                  className={`font-number text-xl font-bold ${
-                    s.color === "teal"
-                      ? "text-teal"
-                      : s.color === "rose"
-                      ? "text-negative"
-                      : "text-zinc-300"
+                  className={`tabular-nums text-heading ${
+                    s.color === "accent"
+                      ? "text-accent"
+                      : s.color === "loss"
+                      ? "text-loss"
+                      : "text-primary"
                   }`}
                 >
                   {(() => {
@@ -549,12 +580,29 @@ export default function ReportPage() {
                     return `${neg ? "−" : ""}₹${out}.${d}`;
                   })()}
                 </p>
-                <p className="text-[11px] text-zinc-600 mt-1 leading-snug">{s.desc}</p>
+                <p className="mt-1 text-caption text-secondary">{s.desc}</p>
               </div>
             );
           })}
         </div>
       </div>
+
+      {audit.warnings.length > 0 && (
+        <footer className="mt-6 px-4 xl:px-0">
+          <div className="border-t border-subtle pt-5">
+            <div className="mb-4">
+              <p className="text-caption uppercase tracking-label-wide text-muted">
+                Model Diagnostics
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              {audit.warnings.map((warning, index) => (
+                <WarningBanner key={index} variant="warning" message={warning} />
+              ))}
+            </div>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

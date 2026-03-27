@@ -24,8 +24,6 @@ function buildWcRows(
   sc: ModelSchedules["working_capital"],
   projIS: ProjectedIncomeStatement
 ): ReportRow[] {
-  const n = sc.years.length;
-
   // Receivable Days = (Trade Rec / Revenue) * 365
   const recDays = sc.trade_receivables.map((v, i) =>
     projIS.revenue[i] > 0 ? (v / projIS.revenue[i]) * 365 : null

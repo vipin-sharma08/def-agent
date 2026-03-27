@@ -1,50 +1,57 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDropzone, type FileRejection } from "react-dropzone";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Upload,
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
   FileText,
   Loader2,
-  AlertCircle,
+  Upload,
   X,
-  CheckCircle2,
-  ArrowRight,
 } from "lucide-react";
 import { useValkyrie } from "@/lib/store";
-import { cn } from "@/lib/utils";
 import type { ExtractedData } from "@/lib/types";
-import { normalizeExtractedData } from "@/lib/normalizeExtractedData";
+import { cn } from "@/lib/utils";
 
-const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
+const MAX_SIZE = 50 * 1024 * 1024;
 
 const PROGRESS_STEPS = [
-  { label: "Reading balance sheet",         pct: 12 },
-  { label: "Extracting income statement",   pct: 28 },
-  { label: "Parsing cash flow statement",   pct: 44 },
-  { label: "Cross-verifying statements",    pct: 60 },
-  { label: "Extracting working capital",    pct: 74 },
-  { label: "Validating extracted data",     pct: 88 },
-  { label: "Finalising report",             pct: 96 },
+  { label: "Reading balance sheet", pct: 12 },
+  { label: "Extracting income statement", pct: 28 },
+  { label: "Parsing cash flow statement", pct: 44 },
+  { label: "Cross-verifying statements", pct: 60 },
+  { label: "Extracting working capital", pct: 74 },
+  { label: "Validating extracted data", pct: 88 },
+  { label: "Finalising report", pct: 96 },
 ];
 
 function humanizeError(raw: string): string {
   const lower = raw.toLowerCase();
-  if (lower.includes("timed out") || lower.includes("504") || lower.includes("timeout"))
-    return "The report is very large. Extraction timed out — please try a shorter report or try again.";
-  if (lower.includes("502") || lower.includes("extraction service"))
+
+  if (lower.includes("timed out") || lower.includes("504") || lower.includes("timeout")) {
+    return "The report is very large. Extraction timed out - please try a shorter report or try again.";
+  }
+
+  if (lower.includes("502") || lower.includes("extraction service")) {
     return "The extraction service is temporarily unavailable. Please try again in a few minutes.";
-  if (lower.includes("500") || lower.includes("server error"))
+  }
+
+  if (lower.includes("500") || lower.includes("server error")) {
     return "A server error occurred during extraction. Please try again.";
-  if (lower.includes("invalid json") || lower.includes("unexpected token"))
+  }
+
+  if (lower.includes("invalid json") || lower.includes("unexpected token")) {
     return "The server returned an unexpected response. Please try again.";
+  }
+
   return raw;
 }
 
-const formatFileSize = (bytes: number): string =>
-  `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+const formatFileSize = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 const toBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -54,99 +61,123 @@ const toBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-// ─── Component ────────────────────────────────────────────────────
-
 export const PdfUploader = () => {
   const router = useRouter();
   const { setPdfFile, setExtractedData, setStep, setLoading, setError } = useValkyrie();
 
-  const [selectedFile, setSelectedFile]   = useState<File | null>(null);
-  const [rejectionMsg, setRejectionMsg]   = useState<string | null>(null);
-  const [isAnalyzing,  setIsAnalyzing]    = useState(false);
-  const [progressIdx,  setProgressIdx]    = useState(0);
-  const [inlineError,  setInlineError]    = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [rejectionMsg, setRejectionMsg] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [progressIdx, setProgressIdx] = useState(0);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Advance progress step on a timer while analyzing
   useEffect(() => {
-    if (isAnalyzing) {
-      setProgressIdx(0);
-      intervalRef.current = setInterval(() => {
-        setProgressIdx((i) => Math.min(i + 1, PROGRESS_STEPS.length - 1));
-      }, 2800);
-    } else {
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (!isAnalyzing) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+
+    setProgressIdx(0);
+    intervalRef.current = setInterval(() => {
+      setProgressIdx((current) => Math.min(current + 1, PROGRESS_STEPS.length - 1));
+    }, 2800);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [isAnalyzing]);
 
-  const onDrop = useCallback((accepted: File[]) => {
-    setRejectionMsg(null);
-    setInlineError(null);
-    if (accepted[0]) { setSelectedFile(accepted[0]); setPdfFile(accepted[0]); }
-  }, [setPdfFile]);
+  const onDrop = useCallback(
+    (accepted: File[]) => {
+      setRejectionMsg(null);
+      setInlineError(null);
 
-  const onDropRejected = useCallback((rejections: FileRejection[]) => {
-    setSelectedFile(null);
-    setPdfFile(null);
-    const code = rejections[0]?.errors[0]?.code;
-    if (code === "file-too-large")   setRejectionMsg("File exceeds 50 MB limit. Please use a smaller PDF.");
-    else if (code === "file-invalid-type") setRejectionMsg("Only PDF files are accepted.");
-    else setRejectionMsg("File rejected. Please try a different PDF.");
-  }, [setPdfFile]);
+      if (accepted[0]) {
+        setSelectedFile(accepted[0]);
+        setPdfFile(accepted[0]);
+      }
+    },
+    [setPdfFile]
+  );
 
-  const { getRootProps, getInputProps, isDragActive, isDragAccept, isDragReject } =
-    useDropzone({
-      onDrop,
-      onDropRejected,
-      accept: { "application/pdf": [".pdf"] },
-      maxSize: MAX_SIZE,
-      multiple: false,
-      disabled: isAnalyzing,
-    });
+  const onDropRejected = useCallback(
+    (rejections: FileRejection[]) => {
+      setSelectedFile(null);
+      setPdfFile(null);
+
+      const code = rejections[0]?.errors[0]?.code;
+      if (code === "file-too-large") {
+        setRejectionMsg("File exceeds 50 MB limit. Please use a smaller PDF.");
+      } else if (code === "file-invalid-type") {
+        setRejectionMsg("Only PDF files are accepted.");
+      } else {
+        setRejectionMsg("File rejected. Please try a different PDF.");
+      }
+    },
+    [setPdfFile]
+  );
+
+  const { getRootProps, getInputProps, isDragActive, isDragAccept, isDragReject } = useDropzone({
+    onDrop,
+    onDropRejected,
+    accept: { "application/pdf": [".pdf"] },
+    maxSize: MAX_SIZE,
+    multiple: false,
+    disabled: isAnalyzing,
+  });
 
   const handleAnalyze = async () => {
     if (!selectedFile) return;
+
     setInlineError(null);
     setIsAnalyzing(true);
     setLoading(true);
 
     try {
-      // PDF magic-byte sanity check
       try {
         const header = await selectedFile.slice(0, 5).text();
         if (!header.startsWith("%PDF")) {
-          setInlineError("This file doesn't appear to be a valid PDF. It may be corrupted or renamed.");
+          setInlineError(
+            "This file does not appear to be a valid PDF. It may be corrupted or renamed."
+          );
           setIsAnalyzing(false);
           setLoading(false);
           return;
         }
-      } catch { /* proceed — API will catch it */ }
-
-      const base64 = await toBase64(selectedFile);
-      const res    = await fetch("/api/extract", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ pdf: base64, filename: selectedFile.name }),
-      });
-
-      const raw = (await res.json()) as unknown;
-      // Narrow error responses before normalizing
-      if (!res.ok) {
-        const errObj = raw as { error?: string };
-        throw new Error(errObj.error ?? `Extraction failed (${res.status})`);
+      } catch {
+        // Proceed and let the API validate the file if needed.
       }
 
-      const json: ExtractedData = normalizeExtractedData(raw);
+      const base64 = await toBase64(selectedFile);
+      const response = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdf: base64, filename: selectedFile.name }),
+      });
+
+      const raw = (await response.json()) as unknown;
+      if (!response.ok) {
+        const errorResponse = raw as { error?: string };
+        throw new Error(errorResponse.error ?? `Extraction failed (${response.status})`);
+      }
+
+      const json = raw as ExtractedData;
       setExtractedData(json);
       setStep("review");
       router.push("/review");
-    } catch (err) {
-      const raw = err instanceof Error ? err.message : "An unexpected error occurred";
-      const msg = humanizeError(raw);
-      setInlineError(msg);
-      setError(msg);
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : "An unexpected error occurred";
+      const message = humanizeError(raw);
+      setInlineError(message);
+      setError(message);
     } finally {
       setIsAnalyzing(false);
       setLoading(false);
@@ -160,148 +191,146 @@ export const PdfUploader = () => {
     setRejectionMsg(null);
   };
 
-  // ── Border style based on drag state ──
   const zoneBorderClass = (() => {
-    if (rejectionMsg || inlineError || isDragReject)
-      return "border-negative/50 bg-neg-surface";
-    if (isDragAccept || isDragActive)
-      return "border-teal bg-teal-surface";
-    if (selectedFile)
-      return "border-teal/40 bg-teal-surface";
-    return "border-border-strong hover:border-teal/30 hover:bg-teal-surface/50";
+    if (rejectionMsg || inlineError || isDragReject) {
+      return "border-[var(--valk-loss)] bg-loss";
+    }
+
+    if (isDragAccept || isDragActive || selectedFile) {
+      return "border-accent bg-accent-muted";
+    }
+
+    return "border-subtle bg-surface hover:border-accent hover:bg-surface-alt";
   })();
 
   const currentStep = PROGRESS_STEPS[progressIdx];
 
   return (
     <div className="w-full">
-      {/* ── Drop zone ── */}
       <div
         {...getRootProps()}
         className={cn(
-          "upload-zone cursor-pointer transition-all duration-200",
+          "cursor-pointer overflow-hidden rounded-[var(--valk-radius-lg)] border transition-colors duration-150",
           zoneBorderClass,
-          isAnalyzing && "cursor-not-allowed pointer-events-none"
+          isAnalyzing && "pointer-events-none cursor-not-allowed"
         )}
       >
         <input {...getInputProps()} />
 
         <AnimatePresence mode="wait">
-
-          {/* Idle state */}
-          {!selectedFile && !isAnalyzing && (
+          {!selectedFile && !isAnalyzing ? (
             <motion.div
               key="idle"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2 }}
-              className="flex flex-col items-center justify-center py-16 px-8 text-center"
+              className="flex flex-col items-center justify-center px-8 py-16 text-center"
             >
               <div
                 className={cn(
-                  "mb-5 p-5 rounded-2xl border transition-all duration-200",
+                  "mb-5 flex h-16 w-16 items-center justify-center rounded-[var(--valk-radius-lg)] border transition-colors duration-150",
                   isDragAccept
-                    ? "bg-teal-surface border-teal-border"
+                    ? "border-accent bg-accent-muted"
                     : isDragReject || rejectionMsg
-                    ? "bg-neg-surface border-neg-border"
-                    : "bg-surface border-border"
+                      ? "border-[var(--valk-loss)] bg-loss"
+                      : "border-subtle bg-surface-alt"
                 )}
               >
                 <Upload
-                  size={28}
                   className={cn(
-                    "transition-colors",
-                    isDragAccept ? "text-teal" : isDragReject || rejectionMsg ? "text-negative" : "text-zinc-600"
+                    "h-7 w-7 transition-colors",
+                    isDragAccept
+                      ? "text-accent"
+                      : isDragReject || rejectionMsg
+                        ? "text-loss"
+                        : "text-muted"
                   )}
+                  strokeWidth={1.8}
                 />
               </div>
 
               {isDragActive ? (
-                <p className="text-base font-semibold text-teal">
-                  Release to upload
-                </p>
+                <p className="text-body font-medium text-accent">Release to upload</p>
               ) : (
                 <>
-                  <p className="text-[15px] font-semibold text-zinc-100 mb-1.5">
-                    Drop your Annual Report PDF here
-                  </p>
-                  <p className="text-sm text-zinc-600 mb-6">
+                  <p className="mb-2 text-title text-primary">Drop your Annual Report PDF here</p>
+                  <p className="mb-6 text-body text-secondary">
                     or{" "}
-                    <span className="text-teal underline underline-offset-2 cursor-pointer">
+                    <span className="cursor-pointer text-accent underline underline-offset-2">
                       click to browse
                     </span>
                   </p>
-                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-700">
-                    <span className="px-2 py-1 rounded-md border border-border bg-elevated">PDF only</span>
-                    <span className="px-2 py-1 rounded-md border border-border bg-elevated">Up to 50 MB</span>
-                    <span className="px-2 py-1 rounded-md border border-border bg-elevated">Ind AS / IFRS</span>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <span className="rounded-[var(--valk-radius-sm)] border border-subtle bg-surface-alt px-2 py-1 text-caption text-muted">
+                      PDF only
+                    </span>
+                    <span className="rounded-[var(--valk-radius-sm)] border border-subtle bg-surface-alt px-2 py-1 text-caption text-muted">
+                      Up to 50 MB
+                    </span>
+                    <span className="rounded-[var(--valk-radius-sm)] border border-subtle bg-surface-alt px-2 py-1 text-caption text-muted">
+                      Ind AS / IFRS
+                    </span>
                   </div>
                 </>
               )}
             </motion.div>
-          )}
+          ) : null}
 
-          {/* File selected */}
-          {selectedFile && !isAnalyzing && (
+          {selectedFile && !isAnalyzing ? (
             <motion.div
               key="selected"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2 }}
-              className="flex items-center gap-4 px-6 py-5"
+              className="flex items-center gap-4 bg-surface-alt px-5 py-5"
             >
-              <div className="p-3 rounded-xl bg-teal-surface border border-teal-border flex-shrink-0">
-                <FileText size={22} className="text-teal" />
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[var(--valk-radius-md)] border border-accent bg-accent-muted">
+                <FileText className="h-5 w-5 text-accent" strokeWidth={1.8} />
               </div>
 
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-zinc-100 truncate">{selectedFile.name}</p>
-                <p className="text-xs font-mono text-zinc-600 mt-0.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-body font-medium text-primary">{selectedFile.name}</p>
+                <p className="mt-1 text-caption text-muted">
                   {formatFileSize(selectedFile.size)} · PDF
                 </p>
               </div>
 
-              <CheckCircle2 size={16} className="text-teal flex-shrink-0" />
+              <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-accent" strokeWidth={1.8} />
 
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); handleClear(); }}
-                className="p-1.5 rounded-md text-zinc-600 hover:text-negative hover:bg-neg-surface transition-colors flex-shrink-0"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleClear();
+                }}
+                className="flex-shrink-0 rounded-[var(--valk-radius-sm)] p-1.5 text-muted transition-colors duration-150 hover:bg-loss hover:text-loss"
                 aria-label="Remove file"
               >
-                <X size={14} />
+                <X className="h-3.5 w-3.5" strokeWidth={1.8} />
               </button>
             </motion.div>
-          )}
+          ) : null}
 
-          {/* Analyzing */}
-          {isAnalyzing && (
+          {isAnalyzing ? (
             <motion.div
               key="analyzing"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex flex-col items-center justify-center py-14 px-8 text-center"
+              className="flex flex-col items-center justify-center bg-surface-alt px-8 py-14 text-center"
             >
-              {/* Spinner ring */}
               <div className="relative mb-6">
-                <div className="w-14 h-14 rounded-full border border-border flex items-center justify-center">
-                  <FileText size={20} className="text-zinc-600" />
+                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-subtle bg-surface">
+                  <FileText className="h-5 w-5 text-muted" strokeWidth={1.8} />
                 </div>
-                <Loader2
-                  size={22}
-                  className="absolute -top-1.5 -right-1.5 text-teal animate-spin"
-                />
+                <Loader2 className="absolute -right-1.5 -top-1.5 h-5.5 w-5.5 animate-spin text-accent" />
               </div>
 
-              <p className="text-sm font-semibold text-zinc-100 mb-1">
-                Analysing report
-              </p>
+              <p className="mb-2 text-title font-semibold text-primary">Analysing report</p>
 
-              {/* Progress message */}
               <AnimatePresence mode="wait">
                 <motion.p
                   key={progressIdx}
@@ -309,76 +338,70 @@ export const PdfUploader = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.25 }}
-                  className="text-xs font-mono text-teal/70 mb-5"
+                  className="mb-5 font-mono text-caption text-accent"
                 >
                   {currentStep.label}...
                 </motion.p>
               </AnimatePresence>
 
-              {/* Progress bar */}
-              <div className="w-48 h-0.5 bg-elevated rounded-full overflow-hidden">
+              <div className="h-1 w-48 overflow-hidden rounded-full bg-tertiary">
                 <motion.div
-                  className="h-full bg-teal rounded-full"
+                  className="h-full rounded-full bg-accent"
                   animate={{ width: `${currentStep.pct}%` }}
                   transition={{ duration: 0.6, ease: "easeOut" }}
                 />
               </div>
 
-              <p className="text-[11px] text-zinc-700 mt-4 font-mono">
+              <p className="mt-4 text-caption text-muted">
                 Large reports may take up to 2 minutes
               </p>
             </motion.div>
-          )}
-
+          ) : null}
         </AnimatePresence>
       </div>
 
-      {/* ── Error messages ── */}
       <AnimatePresence>
-        {(rejectionMsg || inlineError) && (
+        {rejectionMsg || inlineError ? (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.2 }}
-            className="mt-3 flex items-start gap-2.5 px-4 py-3 rounded-xl border border-neg-border bg-neg-surface"
+            className="mt-3 flex items-start gap-3 rounded-[var(--valk-radius-md)] border border-[var(--valk-loss)] bg-loss px-4 py-3"
           >
-            <AlertCircle size={14} className="text-negative flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-negative/80 flex-1 leading-relaxed">
-              {rejectionMsg ?? inlineError}
-            </p>
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-loss" strokeWidth={1.8} />
+            <p className="flex-1 text-caption text-loss">{rejectionMsg ?? inlineError}</p>
             <button
-              onClick={() => { setRejectionMsg(null); setInlineError(null); }}
-              className="text-zinc-600 hover:text-negative transition-colors flex-shrink-0"
+              onClick={() => {
+                setRejectionMsg(null);
+                setInlineError(null);
+              }}
+              className="flex-shrink-0 text-muted transition-colors duration-150 hover:text-loss"
               aria-label="Dismiss"
             >
-              <X size={12} />
+              <X className="h-3 w-3" strokeWidth={1.8} />
             </button>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
-      {/* ── Analyse CTA ── */}
       <AnimatePresence>
-        {selectedFile && !isAnalyzing && (
+        {selectedFile && !isAnalyzing ? (
           <motion.button
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
             onClick={handleAnalyze}
-            className="mt-4 w-full group relative py-3.5 px-6 rounded-xl bg-teal hover:bg-teal-bright text-base font-semibold text-[#0A0A0A] transition-colors duration-200 glow-teal flex items-center justify-center gap-2"
+            className="valk-button-primary group mt-4 w-full"
           >
             Analyse Report
-            <ArrowRight
-              size={16}
-              className="transition-transform duration-200 group-hover:translate-x-0.5"
-            />
+            <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
           </motion.button>
-        )}
+        ) : null}
       </AnimatePresence>
 
-      <p className="mt-3 text-center text-[11px] text-zinc-700 font-mono">
+      <p className="mt-4 text-center text-caption text-disabled">
         Processed securely · Never stored permanently
       </p>
     </div>

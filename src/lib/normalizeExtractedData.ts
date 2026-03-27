@@ -31,13 +31,14 @@ import type {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type Num = number | null | undefined;
+type NumLike = Num | string | (number | string | null | undefined)[];
 
 /**
  * Safely dig into a nested object using a dot-separated path.
  * Returns undefined if any segment is missing.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function dig(obj: any, ...keys: string[]): Num {
+function dig(obj: any, ...keys: string[]): NumLike {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let cur: any = obj;
   for (const k of keys) {
@@ -45,6 +46,13 @@ function dig(obj: any, ...keys: string[]): Num {
     cur = cur[k];
   }
   if (cur === null || cur === undefined) return undefined;
+  if (Array.isArray(cur)) {
+    return cur.map((item) => {
+      if (item === null || item === undefined) return null;
+      const n = Number(item);
+      return isFinite(n) ? n : null;
+    });
+  }
   const n = Number(cur);
   return isFinite(n) ? n : undefined;
 }
@@ -52,8 +60,9 @@ function dig(obj: any, ...keys: string[]): Num {
 /**
  * Returns the first defined numeric value from multiple candidates.
  */
-function first(...vals: Num[]): Num {
+function first(...vals: NumLike[]): NumLike {
   for (const v of vals) {
+    if (Array.isArray(v) && v.length > 0) return v;
     if (v !== null && v !== undefined && isFinite(Number(v))) return Number(v);
   }
   return undefined;
@@ -64,9 +73,16 @@ function first(...vals: Num[]): Num {
  * ExtractedData uses number[] throughout; null is intentional for fields
  * absent in the report — UI components render null as "—".
  */
-function wrap(v: Num): number[] {
+function wrap(v: NumLike): number[] {
+  if (Array.isArray(v)) {
+    return v.map((item) => {
+      if (item === null || item === undefined) return null as unknown as number;
+      const n = Number(item);
+      return isFinite(n) ? n : (null as unknown as number);
+    });
+  }
   if (v === null || v === undefined) return [null as unknown as number];
-  const n = typeof v === "string" ? parseFloat(v as unknown as string) : Number(v);
+  const n = typeof v === "string" ? parseFloat(v) : Number(v);
   return [isFinite(n) ? n : (null as unknown as number)];
 }
 
@@ -264,6 +280,7 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
   const bsClSrc = bsLiabSrc.current_liabilities ?? {};
 
   const ppe = first(
+    dig(bs, "property_plant_equipment"),
     dig(bsNcaSrc, "property_plant_and_equipment"),
     dig(bsNcaSrc, "property_plant_equipment")
   );
@@ -273,32 +290,42 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
     accumulated_depreciation: wrap(null),
     property_plant_equipment_net: wrap(ppe),
     capital_work_in_progress: wrap(
-      first(dig(bsNcaSrc, "capital_work_in_progress"))
+      first(
+        dig(bs, "capital_work_in_progress"),
+        dig(bsNcaSrc, "capital_work_in_progress")
+      )
     ),
     intangible_assets: wrap(
       first(
+        dig(bs, "intangible_assets"),
         dig(bsNcaSrc, "other_intangible_assets"),
         dig(bsNcaSrc, "intangible_assets"),
         dig(bsNcaSrc, "goodwill") // Include goodwill if no separate intangibles
       )
     ),
     right_of_use_assets: wrap(
-      first(dig(bsNcaSrc, "right_of_use_assets"))
+      first(
+        dig(bs, "right_of_use_assets"),
+        dig(bsNcaSrc, "right_of_use_assets")
+      )
     ),
     non_current_investments: wrap(
       first(
+        dig(bs, "non_current_investments"),
         dig(bsNcaSrc, "investments"),
         dig(bsNcaSrc, "investments_non_current")
       )
     ),
     deferred_tax_assets_net: wrap(
       first(
+        dig(bs, "deferred_tax_assets_net"),
         dig(bsNcaSrc, "deferred_tax_assets"),
         dig(bsNcaSrc, "deferred_tax_assets_net")
       )
     ),
     other_non_current_assets: wrap(
       first(
+        dig(bs, "other_non_current_assets"),
         dig(bsNcaSrc, "other_non_current_assets"),
         // Sum remaining NCA fields if present
         (() => {
@@ -315,6 +342,7 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
     ),
     total_non_current_assets: wrap(
       first(
+        dig(bs, "total_non_current_assets"),
         dig(bsNcaSrc, "total_non_current_assets"),
         dig(bsAssetsSrc, "total_non_current_assets")
       )
@@ -323,7 +351,10 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
 
   const currentAssets: CurrentAssets = {
     inventories: wrap(
-      first(dig(bsCaSrc, "inventories"))
+      first(
+        dig(bs, "inventories"),
+        dig(bsCaSrc, "inventories")
+      )
     ),
     inventories_breakup: {
       raw_materials: wrap(null),
@@ -332,23 +363,29 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
       stores_and_spares: wrap(null),
     },
     trade_receivables: wrap(
-      first(dig(bsCaSrc, "trade_receivables"))
+      first(
+        dig(bs, "trade_receivables"),
+        dig(bsCaSrc, "trade_receivables")
+      )
     ),
     cash_and_cash_equivalents: wrap(
       first(
+        dig(bs, "cash_and_cash_equivalents"),
         dig(bsCaSrc, "cash_and_cash_equivalents"),
         dig(bsCaSrc, "cash_and_equivalents")
       )
     ),
-    bank_balances_other: wrap(null),
+    bank_balances_other: wrap(first(dig(bs, "bank_balances_other"))),
     current_investments: wrap(
       first(
+        dig(bs, "current_investments"),
         dig(bsCaSrc, "investments"),
         dig(bsCaSrc, "investments_current")
       )
     ),
     other_current_assets: wrap(
       first(
+        dig(bs, "other_current_assets"),
         dig(bsCaSrc, "other_current_assets"),
         // Sum remaining CA fields if present
         (() => {
@@ -365,6 +402,7 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
     ),
     total_current_assets: wrap(
       first(
+        dig(bs, "total_current_assets"),
         dig(bsCaSrc, "total_current_assets"),
         dig(bsAssetsSrc, "total_current_assets")
       )
@@ -384,20 +422,25 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
 
   // Equity
   const shareCapital = first(
+    dig(bs, "share_capital"),
     dig(bsEqSrc, "equity_share_capital"),
     dig(bsEqSrc, "share_capital")
   );
   const reservesAndSurplus = first(
+    dig(bs, "reserves_and_surplus"),
     dig(bsEqSrc, "other_equity"),
     dig(bsEqSrc, "reserves_and_surplus"),
     (() => {
       const re = dig(bsEqSrc, "retained_earnings");
       const oe = dig(bsEqSrc, "other_equity");
-      if (re !== undefined && oe !== undefined) return (re ?? 0) + (oe ?? 0);
-      return re ?? oe;
+      const reNum = Array.isArray(re) ? re[0] : re;
+      const oeNum = Array.isArray(oe) ? oe[0] : oe;
+      if (reNum !== undefined && oeNum !== undefined) return Number(reNum ?? 0) + Number(oeNum ?? 0);
+      return reNum ?? oeNum;
     })()
   );
   const totalEquity = first(
+    dig(bs, "total_equity"),
     dig(bsEqSrc, "total_equity")
   );
 
@@ -411,27 +454,34 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
   const nonCurrentLiabilities: NonCurrentLiabilities = {
     long_term_borrowings: wrap(
       first(
+        dig(bs, "long_term_borrowings"),
         dig(bsNclSrc, "long_term_borrowings"),
         dig(bsNclSrc, "borrowings")
       )
     ),
     lease_liabilities_non_current: wrap(
       first(
+        dig(bs, "lease_liabilities_non_current"),
         dig(bsNclSrc, "lease_liabilities"),
         dig(bsNclSrc, "lease_liabilities_non_current")
       )
     ),
     deferred_tax_liabilities_net: wrap(
       first(
+        dig(bs, "deferred_tax_liabilities_net"),
         dig(bsNclSrc, "deferred_tax_liabilities"),
         dig(bsNclSrc, "deferred_tax_liabilities_net")
       )
     ),
     long_term_provisions: wrap(
-      first(dig(bsNclSrc, "long_term_provisions"))
+      first(
+        dig(bs, "long_term_provisions"),
+        dig(bsNclSrc, "long_term_provisions")
+      )
     ),
     other_non_current_liabilities: wrap(
       first(
+        dig(bs, "other_non_current_liabilities"),
         dig(bsNclSrc, "other_non_current_liabilities"),
         (() => {
           const ofl = dig(bsNclSrc, "other_financial_liabilities");
@@ -445,6 +495,7 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
     ),
     total_non_current_liabilities: wrap(
       first(
+        dig(bs, "total_non_current_liabilities"),
         dig(bsNclSrc, "total_non_current_liabilities"),
         dig(bsLiabSrc, "total_non_current_liabilities")
       )
@@ -453,11 +504,14 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
 
   // Current liabilities
   const tradePay = first(
+    dig(bs, "trade_payables"),
     (() => {
       const msme = dig(bsClSrc, "trade_payables_msme");
       const others = dig(bsClSrc, "trade_payables_others");
-      if (msme !== undefined || others !== undefined)
-        return (msme ?? 0) + (others ?? 0);
+      const msmeNum = Array.isArray(msme) ? msme[0] : msme;
+      const othersNum = Array.isArray(others) ? others[0] : others;
+      if (msmeNum !== undefined || othersNum !== undefined)
+        return Number(msmeNum ?? 0) + Number(othersNum ?? 0);
       return undefined;
     })(),
     dig(bsClSrc, "trade_payables")
@@ -466,12 +520,14 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
   const currentLiabilities: CurrentLiabilities = {
     short_term_borrowings: wrap(
       first(
+        dig(bs, "short_term_borrowings"),
         dig(bsClSrc, "short_term_borrowings"),
         dig(bsClSrc, "borrowings")
       )
     ),
     lease_liabilities_current: wrap(
       first(
+        dig(bs, "lease_liabilities_current"),
         dig(bsClSrc, "lease_liabilities"),
         dig(bsClSrc, "lease_liabilities_current")
       )
@@ -479,6 +535,7 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
     trade_payables: wrap(tradePay),
     other_current_liabilities: wrap(
       first(
+        dig(bs, "other_current_liabilities"),
         dig(bsClSrc, "other_current_liabilities"),
         (() => {
           const ofl = dig(bsClSrc, "other_financial_liabilities");
@@ -492,18 +549,22 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
     ),
     short_term_provisions: wrap(
       first(
+        dig(bs, "short_term_provisions"),
         dig(bsClSrc, "provisions"),
         dig(bsClSrc, "short_term_provisions")
       )
     ),
     current_maturities_of_long_term_debt: wrap(
       first(
+        dig(bs, "current_maturities_of_lt_debt"),
+        dig(bs, "current_maturities_of_long_term_debt"),
         dig(bsClSrc, "current_maturities_of_long_term_debt"),
         dig(bsClSrc, "current_maturities_of_lt_debt")
       )
     ),
     total_current_liabilities: wrap(
       first(
+        dig(bs, "total_current_liabilities"),
         dig(bsClSrc, "total_current_liabilities"),
         dig(bsLiabSrc, "total_current_liabilities")
       )
@@ -534,22 +595,26 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
   const cfFin = cf.financing_activities ?? {};
 
   const cfo = first(
+    dig(cf, "cash_from_operating_activities"),
     dig(cfOps, "net_cash_from_operating_activities"),
     dig(cfOps, "net_cash_from_operations"),
     dig(cf, "net_cash_from_operating_activities")
   );
   const cfi = first(
+    dig(cf, "cash_from_investing_activities"),
     dig(cfInv, "net_cash_used_in_investing_activities"),
     dig(cfInv, "net_cash_from_investing_activities"),
     dig(cfInv, "net_cash_from_investing"),
     dig(cf, "net_cash_used_in_investing_activities")
   );
   const capex = first(
+    dig(cf, "capital_expenditure"),
     dig(cfInv, "expenditure_on_property_plant_and_equipment"),
     dig(cfInv, "capital_expenditure"),
     dig(cfInv, "capex")
   );
   const cff = first(
+    dig(cf, "cash_from_financing_activities"),
     dig(cfFin, "net_cash_used_in_financing_activities"),
     dig(cfFin, "net_cash_from_financing_activities"),
     dig(cfFin, "net_cash_from_financing"),
@@ -627,30 +692,35 @@ export function normalizeExtractedData(raw: unknown): ExtractedData {
   // ── 7. Validation ─────────────────────────────────────────────
   const discrepancies: string[] = [];
 
+  const totalAssetCheck = Array.isArray(totalAssetVal) ? totalAssetVal[0] : totalAssetVal;
+  const totalELCheck = Array.isArray(totalELVal) ? totalELVal[0] : totalELVal;
   const bsBalances =
-    totalAssetVal == null || totalELVal == null
+    totalAssetCheck == null || totalELCheck == null
       ? true
-      : Math.abs(totalAssetVal - totalELVal) < 1;
+      : Math.abs(Number(totalAssetCheck) - Number(totalELCheck)) < 1;
 
-  if (!bsBalances && totalAssetVal != null && totalELVal != null) {
+  if (!bsBalances && totalAssetCheck != null && totalELCheck != null) {
     discrepancies.push(
-      `Balance sheet mismatch: Total Assets (${totalAssetVal}) ≠ Total Equity & Liabilities (${totalELVal})`
+      `Balance sheet mismatch: Total Assets (${totalAssetCheck}) ??? Total Equity & Liabilities (${totalELCheck})`
     );
   }
 
   // Cash tie: closing cash from CF should match BS cash
   const bsCashVal = first(
+    dig(bs, "cash_and_cash_equivalents"),
     dig(bsCaSrc, "cash_and_cash_equivalents"),
     dig(bsCaSrc, "cash_and_equivalents")
   );
+  const closingCashCheck = Array.isArray(closingCash) ? closingCash[0] : closingCash;
+  const bsCashCheck = Array.isArray(bsCashVal) ? bsCashVal[0] : bsCashVal;
   const cfTiesToBs =
-    closingCash == null || bsCashVal == null
+    closingCashCheck == null || bsCashCheck == null
       ? true
-      : Math.abs(closingCash - bsCashVal) < 1;
+      : Math.abs(Number(closingCashCheck) - Number(bsCashCheck)) < 1;
 
-  if (!cfTiesToBs && closingCash != null && bsCashVal != null) {
+  if (!cfTiesToBs && closingCashCheck != null && bsCashCheck != null) {
     discrepancies.push(
-      `Cash flow mismatch: CF closing cash (${closingCash}) ≠ BS cash (${bsCashVal})`
+      `Cash flow mismatch: CF closing cash (${closingCashCheck}) ??? BS cash (${bsCashCheck})`
     );
   }
 

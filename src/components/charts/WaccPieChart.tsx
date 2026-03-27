@@ -1,65 +1,71 @@
 "use client";
 
-// WACC Capital Structure Donut
-// Shows Equity vs Debt weight with Ke/Kd labels.
-
-import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { formatPercent } from "@/lib/formatters";
 import type { WaccDetail } from "@/lib/types";
+import { chartTheme } from "@/components/charts/ChartTheme";
 
 interface Props {
   wacc: WaccDetail;
 }
 
 export const WaccPieChart = ({ wacc }: Props) => {
-  const data = [
-    { name: "Equity", value: wacc.equity_weight, rate: wacc.cost_of_equity },
-    { name: "Debt", value: wacc.debt_weight, rate: wacc.cost_of_debt_post_tax },
+  const series = [
+    {
+      label: "Equity",
+      value: wacc.equity_weight,
+      rate: wacc.cost_of_equity,
+      tone: chartTheme.accent,
+    },
+    {
+      label: "Debt",
+      value: wacc.debt_weight,
+      rate: wacc.cost_of_debt_post_tax,
+      tone: chartTheme.cyan,
+    },
   ];
 
-  const COLORS = ["#14B8A6", "#3B82F6"]; // teal, blue
-
   return (
-    <div>
-      <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider mb-2">
-        Capital Structure
-      </p>
+    <div className="space-y-3">
+      <p className="text-caption uppercase tracking-[0.12em] text-muted">Capital Structure</p>
       <div className="flex items-center gap-4">
         <ResponsiveContainer width={120} height={120}>
           <PieChart>
             <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              innerRadius={32}
-              outerRadius={52}
-              paddingAngle={3}
+              data={series}
               dataKey="value"
-              strokeWidth={0}
-              isAnimationActive={false}
+              innerRadius={34}
+              outerRadius={52}
+              paddingAngle={2}
+              stroke="none"
             >
-              {data.map((_, i) => (
-                <Cell key={i} fill={COLORS[i]} opacity={0.8} />
+              {series.map((item) => (
+                <Cell key={item.label} fill={item.tone} />
               ))}
             </Pie>
           </PieChart>
         </ResponsiveContainer>
-        <div className="space-y-2 text-xs">
-          {data.map((d, i) => (
-            <div key={d.name} className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ background: COLORS[i] }} />
-              <span className="text-zinc-400">{d.name}</span>
-              <span className="font-mono font-semibold text-zinc-200">
-                {d.value.toFixed(1)}%
+        <div className="space-y-3">
+          {series.map((item) => (
+            <div key={item.label} className="flex items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: item.tone }}
+              />
+              <span className="text-dense text-secondary">{item.label}</span>
+              <span className="text-dense tabular-nums text-primary">
+                {formatPercent(item.value, 1)}
               </span>
-              <span className="font-mono text-zinc-600 text-[10px]">
-                @ {d.rate.toFixed(1)}%
+              <span className="text-caption tabular-nums text-muted">
+                @ {formatPercent(item.rate, 1)}
               </span>
             </div>
           ))}
-          <div className="pt-1 border-t border-border flex items-center gap-2">
-            <div className="w-2.5 h-2.5" />
-            <span className="text-zinc-400">WACC</span>
-            <span className="font-mono font-bold text-teal">{wacc.wacc.toFixed(2)}%</span>
+          <div className="border-t border-subtle pt-3">
+            <span className="text-caption uppercase tracking-[0.12em] text-muted">WACC </span>
+            <span className="text-dense tabular-nums text-primary">
+              {formatPercent(wacc.wacc, 2)}
+            </span>
           </div>
         </div>
       </div>

@@ -1,16 +1,9 @@
 "use client";
 
-// src/components/review/FinancialTable.tsx
-// ═══════════════════════════════════════════════════════════════════
-// Reusable financial data table — sticky first column, inline editing,
-// amber highlights for missing values, monospace numbers.
-// ═══════════════════════════════════════════════════════════════════
-
 import { useState } from "react";
 import { Pencil } from "lucide-react";
+import { formatCell, formatFYLabel, getCellValueColor } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-
-// ─── Public types ─────────────────────────────────────────────────
 
 export interface TableRow {
   key: string;
@@ -19,7 +12,6 @@ export interface TableRow {
   isTotal?: boolean;
   isSubtotal?: boolean;
   isSectionHeader?: boolean;
-  /** 0 = flush, 1 = 1 level in, 2 = 2 levels in */
   indent?: 0 | 1 | 2;
   editable?: boolean;
   format?: "currency" | "percent" | "eps" | "days" | "times";
@@ -31,72 +23,29 @@ interface FinancialTableProps {
   onEdit?: (rowKey: string, yearIndex: number, value: number) => void;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────
+const FIRST_COLUMN_WIDTH = 280;
+const COLUMN_WIDTH = 128;
 
-function fmtCurrency(v: number): string {
-  const num = Number(v);
-  const neg = num < 0;
-  const abs = Math.abs(num);
-  const [intStr, dec] = abs.toFixed(2).split(".");
-  const len = intStr.length;
-  let out = "";
-
-  if (len <= 3) {
-    out = intStr;
-  } else {
-    out = intStr.slice(len - 3);
-    let rem = intStr.slice(0, len - 3);
-    while (rem.length > 2) {
-      out = rem.slice(rem.length - 2) + "," + out;
-      rem = rem.slice(0, rem.length - 2);
-    }
-    if (rem) out = rem + "," + out;
-  }
-
-  return `${neg ? "−" : ""}₹${out}.${dec}`;
-}
-
-function fmtCell(
-  val: number | null | undefined,
-  fmt: TableRow["format"] = "currency"
-): string {
-  if (val === null || val === undefined || !isFinite(Number(val))) return "—";
-  const n = typeof val === "string" ? parseFloat(val as string) : val;
-  switch (fmt) {
-    case "currency": return fmtCurrency(n);
-    case "percent":  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
-    case "eps":      return `₹ ${n.toFixed(2)}`;
-    case "days":     return `${Math.round(n)}d`;
-    case "times":    return `${n.toFixed(1)}x`;
-    default:         return String(n);
-  }
-}
-
-const isMissing = (v: number | null | undefined): boolean =>
-  v === null || v === undefined || !isFinite(v as number);
-
-// ─── Row background helpers ────────────────────────────────────────
-
-const rowBgClass = (row: TableRow, ri: number): string => {
-  if (row.isTotal)    return "bg-elevated";
+function getRowSurface(row: TableRow, rowIndex: number): string {
+  if (row.isTotal) return "bg-surface-alt";
   if (row.isSubtotal) return "bg-surface";
-  return ri % 2 === 0 ? "bg-base" : "bg-surface/50";
-};
+  return rowIndex % 2 === 0 ? "bg-surface" : "bg-surface-alt/60";
+}
 
-const labelClass = (row: TableRow): string => {
-  if (row.isTotal)    return "font-semibold text-zinc-100";
-  if (row.isSubtotal) return "font-medium text-zinc-300";
-  return "font-normal text-zinc-500";
-};
+function getLabelTone(row: TableRow): string {
+  if (row.isTotal) return "text-primary";
+  if (row.isSubtotal) return "text-secondary";
+  return "text-secondary";
+}
 
-const valueClass = (row: TableRow, val: number | null | undefined): string => {
-  if (row.isTotal)    return "font-semibold text-zinc-100";
-  if (row.isSubtotal) return "font-medium text-zinc-300";
-  if (typeof val === "number" && val < 0) return "text-negative";
-  return "text-zinc-400";
-};
-
-// ─── Component ────────────────────────────────────────────────────
+function getValueTone(row: TableRow, value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "text-muted";
+  if (row.format === "percent") return getCellValueColor(value);
+  if (row.isTotal) return "text-primary";
+  if (row.isSubtotal) return "text-secondary";
+  if (value < 0) return "text-loss";
+  return "text-primary";
+}
 
 export const FinancialTable = ({
   years,
@@ -104,68 +53,63 @@ export const FinancialTable = ({
   onEdit,
 }: FinancialTableProps) => {
   const safeYears = years ?? [];
+  const [activeCell, setActiveCell] = useState<{ key: string; yearIndex: number } | null>(null);
+  const [inputValue, setInputValue] = useState("");
 
-  const [activeCell, setActiveCell] = useState<{
-    key: string;
-    yi: number;
-  } | null>(null);
-  const [inputVal, setInputVal] = useState("");
-
-  const beginEdit = (row: TableRow, yi: number) => {
+  const beginEdit = (row: TableRow, yearIndex: number) => {
     if (!row.editable || !onEdit) return;
-    const cur = row.values[yi];
-    setActiveCell({ key: row.key, yi });
-    setInputVal(typeof cur === "number" ? String(cur) : "");
+    const current = row.values[yearIndex];
+    setActiveCell({ key: row.key, yearIndex });
+    setInputValue(current == null || !Number.isFinite(current) ? "" : String(current));
   };
 
-  const commitEdit = (row: TableRow, yi: number) => {
-    const n = parseFloat(inputVal);
-    if (!isNaN(n) && onEdit) onEdit(row.key, yi, n);
+  const commitEdit = (row: TableRow, yearIndex: number) => {
+    const next = Number.parseFloat(inputValue);
+    if (!Number.isNaN(next) && onEdit) onEdit(row.key, yearIndex, next);
     setActiveCell(null);
   };
 
-  const COL_W = 134;
-  const tableMinW = 240 + safeYears.length * COL_W;
-
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-auto scrollbar-thin">
+      <div className="pointer-events-none sticky left-0 top-0 z-30 h-0 w-6 shadow-[12px_0_18px_var(--valk-bg-app)]" />
       <table
-        className="w-full border-collapse"
-        style={{ minWidth: `${tableMinW}px` }}
+        className="w-full border-separate border-spacing-0"
+        style={{ minWidth: FIRST_COLUMN_WIDTH + safeYears.length * COLUMN_WIDTH }}
       >
-        {/* ── Head ── */}
         <thead>
-          <tr className="border-b border-border-strong">
+          <tr>
             <th
               scope="col"
-              className="sticky left-0 z-20 bg-surface px-4 py-3 text-left text-[9px] font-mono text-zinc-700 tracking-[0.22em] uppercase"
-              style={{ minWidth: 240, width: 240 }}
+              className="sticky left-0 top-0 z-30 border-b border-r border-subtle bg-surface-alt px-3 py-2 text-left text-body text-secondary"
+              style={{ minWidth: FIRST_COLUMN_WIDTH, width: FIRST_COLUMN_WIDTH }}
             >
               Line Item
             </th>
-            {safeYears.map((y) => (
+            {safeYears.map((year) => (
               <th
-                key={y}
+                key={year}
                 scope="col"
-                className="px-4 py-3 text-right text-[10px] font-mono font-semibold text-zinc-500 tracking-wider"
-                style={{ minWidth: COL_W, width: COL_W }}
+                className="sticky top-0 z-20 border-b border-subtle bg-surface-alt px-3 py-2 text-right text-body text-secondary"
+                style={{ minWidth: COLUMN_WIDTH, width: COLUMN_WIDTH }}
               >
-                {y}
+                <div className="space-y-1">
+                  <p className="tabular-nums text-body text-secondary">
+                    {formatFYLabel(year, /E$/i.test(year))}
+                  </p>
+                  <p className="text-caption uppercase text-muted">₹ Cr</p>
+                </div>
               </th>
             ))}
           </tr>
         </thead>
-
-        {/* ── Body ── */}
         <tbody>
-          {rows.map((row, ri) => {
-            // ── Section header row ──
+          {rows.map((row, rowIndex) => {
             if (row.isSectionHeader) {
               return (
-                <tr key={row.key} className="border-t border-border">
+                <tr key={row.key}>
                   <td
                     colSpan={safeYears.length + 1}
-                    className="px-4 pt-4 pb-1.5 bg-base text-[9px] font-mono font-bold tracking-[0.22em] text-zinc-800 uppercase"
+                    className="border-b border-subtle bg-app px-3 py-3 text-caption uppercase text-muted"
                   >
                     {row.label}
                   </td>
@@ -173,78 +117,64 @@ export const FinancialTable = ({
               );
             }
 
-            const bg  = rowBgClass(row, ri);
-            const pl  = row.indent === 2 ? "pl-12" : row.indent === 1 ? "pl-8" : "pl-4";
+            const rowSurface = getRowSurface(row, rowIndex);
+            const labelPadding =
+              row.indent === 2 ? "pl-9" : row.indent === 1 ? "pl-6" : "pl-3";
 
             return (
-              <tr
-                key={row.key}
-                className={cn(bg, "border-b border-border/40 group")}
-              >
-                {/* Label — sticky */}
+              <tr key={row.key} className="group">
                 <td
-                  className={cn("sticky left-0 z-10", bg, pl, "py-[7px] pr-3")}
-                  style={{ minWidth: 240, width: 240 }}
+                  className={cn(
+                    "sticky left-0 z-10 border-b border-r border-subtle py-2 pr-3 text-dense",
+                    rowSurface,
+                    labelPadding,
+                    getLabelTone(row)
+                  )}
+                  style={{ minWidth: FIRST_COLUMN_WIDTH, width: FIRST_COLUMN_WIDTH, height: 36 }}
                 >
-                  <span className={cn("text-[13px] leading-snug", labelClass(row))}>
-                    {row.label}
-                  </span>
+                  {row.label}
                 </td>
-
-                {/* Value cells */}
-                {safeYears.map((_, yi) => {
-                  const val      = row.values[yi];
-                  const missing  = isMissing(val);
-                  const isActive = activeCell?.key === row.key && activeCell.yi === yi;
-                  const canEdit  = !!row.editable && !!onEdit;
+                {safeYears.map((_, yearIndex) => {
+                  const value = row.values[yearIndex];
+                  const isMissing = value == null || !Number.isFinite(value);
+                  const isActive =
+                    activeCell?.key === row.key && activeCell.yearIndex === yearIndex;
+                  const canEdit = Boolean(row.editable && onEdit);
 
                   return (
                     <td
-                      key={yi}
+                      key={`${row.key}-${yearIndex}`}
                       className={cn(
-                        "px-3 py-[7px] text-right relative",
-                        missing && "bg-amber-950/20",
-                        canEdit && !isActive && "cursor-pointer hover:bg-teal-surface/60"
+                        "border-b border-subtle px-3 py-2 text-right text-dense tabular-nums transition-colors duration-150",
+                        rowSurface,
+                        canEdit && !isActive && "cursor-pointer hover:bg-hover"
                       )}
-                      onClick={() => !isActive && beginEdit(row, yi)}
-                      title={canEdit ? "Click to override value" : undefined}
+                      style={{ minWidth: COLUMN_WIDTH, width: COLUMN_WIDTH, height: 36 }}
+                      onClick={() => beginEdit(row, yearIndex)}
                     >
                       {isActive ? (
                         <input
                           autoFocus
                           type="number"
                           step="any"
-                          value={inputVal}
-                          onChange={(e) => setInputVal(e.target.value)}
-                          onBlur={() => commitEdit(row, yi)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter")  commitEdit(row, yi);
-                            if (e.key === "Escape") setActiveCell(null);
+                          value={inputValue}
+                          onChange={(event) => setInputValue(event.target.value)}
+                          onBlur={() => commitEdit(row, yearIndex)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") commitEdit(row, yearIndex);
+                            if (event.key === "Escape") setActiveCell(null);
                           }}
-                          className="w-full bg-base border border-teal rounded px-2 py-0.5 text-right font-mono text-teal text-xs focus:outline-none"
+                          className="w-full rounded-[var(--valk-radius-sm)] border border-strong bg-surface-alt px-2 py-1 text-right text-dense tabular-nums text-primary outline-none"
                         />
-                      ) : missing ? (
-                        <span className="inline-flex items-center justify-end gap-1.5 text-amber-400 font-mono text-xs font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                          N/A
-                        </span>
                       ) : (
-                        <span
-                          className={cn(
-                            "font-mono text-[13px] select-none",
-                            valueClass(row, val)
-                          )}
-                        >
-                          {fmtCell(val, row.format)}
+                        <span className={cn("inline-flex items-center gap-1", getValueTone(row, value))}>
+                          <span className="tabular-nums">
+                            {isMissing ? "—" : formatCell(value, row.format ?? "currency")}
+                          </span>
+                          {canEdit && !isMissing ? (
+                            <Pencil className="h-3 w-3 text-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+                          ) : null}
                         </span>
-                      )}
-
-                      {/* Edit pencil hint */}
-                      {canEdit && !isActive && !missing && (
-                        <Pencil
-                          size={9}
-                          className="absolute top-1 right-1 text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                        />
                       )}
                     </td>
                   );

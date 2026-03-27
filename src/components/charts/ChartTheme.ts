@@ -1,0 +1,20 @@
+export const chartTheme = {
+  axis: "var(--valk-text-muted)",
+  label: "var(--valk-text-secondary)",
+  grid: "var(--valk-chart-grid)",
+  surface: "var(--valk-bg-surface-alt)",
+  border: "var(--valk-border-subtle)",
+  profit: "var(--valk-profit)",
+  loss: "var(--valk-loss)",
+  accent: "var(--valk-accent)",
+  teal: "var(--valk-teal)",
+  cyan: "var(--valk-cyan)",
+  purple: "var(--valk-purple)",
+  orange: "var(--valk-orange)",
+  tooltip: {
+    background: "var(--valk-bg-surface-alt)",
+    border: "1px solid var(--valk-border-subtle)",
+    borderRadius: "10px",
+    color: "var(--valk-text-primary)",
+  },
+} as const;

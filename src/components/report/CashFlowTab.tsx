@@ -18,10 +18,8 @@ interface Props {
 
 function buildRows(cf: CashFlowStatement, proj: ProjectedCashFlow): ReportRow[] {
   const h = (cf.years ?? []).length;
-  const p = proj.years.length;
 
   const merge = <T,>(hist: T[], prj: T[]): T[] => [...hist, ...prj];
-  const nullArr = Array<null>(p).fill(null);
   const nullHistArr = Array<null>(h).fill(null);
 
   // Free Cash Flow = CFO + CapEx (CapEx is negative in cash flow statement)
@@ -113,7 +111,7 @@ function buildRows(cf: CashFlowStatement, proj: ProjectedCashFlow): ReportRow[] 
     },
 
     // ── Summary ─────────────────────────────────────────────────
-    { key: "h_summary", label: "SUMMARY", values: [], isSectionHeader: true },
+    { key: "h_summary", label: "CASH POSITION", values: [], isSectionHeader: true },
     {
       key: "fcf",
       label: "Free Cash Flow (FCF = CFO + CapEx)",

@@ -42,17 +42,17 @@ function getCellStyle(
   reference: number,
   isBase: boolean
 ): string {
-  if (isBase) return "bg-teal/15 border-2 border-teal text-teal font-bold";
+  if (isBase) return "bg-profit border-2 border-profit text-profit font-semibold";
 
   const upside = ((value - reference) / Math.abs(reference)) * 100;
 
-  if (upside > 40)   return "bg-teal/25 text-teal";
-  if (upside > 20)   return "bg-teal/15 text-teal/80";
-  if (upside > 5)    return "bg-teal/8 text-teal/60";
-  if (upside > -5)   return "bg-elevated text-zinc-300";
-  if (upside > -20)  return "bg-rose-900/30 text-rose-400";
-  if (upside > -40)  return "bg-rose-900/60 text-rose-300";
-  return              "bg-rose-800/70 text-rose-200";
+  if (upside > 40)   return "bg-profit text-profit";
+  if (upside > 20)   return "bg-profit/80 text-profit";
+  if (upside > 5)    return "bg-profit/50 text-profit";
+  if (upside > -5)   return "bg-surface-alt text-secondary";
+  if (upside > -20)  return "bg-loss/50 text-loss";
+  if (upside > -40)  return "bg-loss/80 text-loss";
+  return              "bg-loss text-loss";
 }
 
 export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
@@ -83,10 +83,10 @@ export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
       {/* Legend */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-zinc-100 mb-0.5">
+          <p className="text-dense font-semibold text-primary mb-0.5">
             Sensitivity Analysis: Intrinsic Value per Share (₹)
           </p>
-          <p className="text-xs text-zinc-600">
+          <p className="text-caption text-muted">
             Rows = Terminal Growth Rate (g%) · Columns = WACC (%)
             {cmp && cmp > 0
               ? ` · Colors relative to CMP (₹${cmp.toFixed(0)})`
@@ -95,16 +95,16 @@ export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
         </div>
         {/* Color scale legend */}
         <div className="flex items-center gap-1 text-[10px] font-mono">
-          <div className="w-6 h-4 bg-teal/25 rounded-sm" />
-          <span className="text-zinc-600 mr-2">&gt;+40%</span>
-          <div className="w-6 h-4 bg-teal/8 rounded-sm" />
-          <span className="text-zinc-600 mr-2">&gt;+5%</span>
-          <div className="w-6 h-4 bg-elevated rounded-sm border border-border" />
-          <span className="text-zinc-600 mr-2">±5%</span>
-          <div className="w-6 h-4 bg-rose-900/30 rounded-sm" />
-          <span className="text-zinc-600 mr-2">&lt;−5%</span>
-          <div className="w-6 h-4 bg-rose-800/70 rounded-sm" />
-          <span className="text-zinc-600">&lt;−40%</span>
+          <div className="w-6 h-4 bg-profit rounded-sm" />
+          <span className="text-muted mr-2">&gt;+40%</span>
+          <div className="w-6 h-4 bg-profit/50 rounded-sm" />
+          <span className="text-muted mr-2">&gt;+5%</span>
+          <div className="w-6 h-4 bg-surface-alt rounded-sm border border-subtle" />
+          <span className="text-muted mr-2">±5%</span>
+          <div className="w-6 h-4 bg-loss/50 rounded-sm" />
+          <span className="text-muted mr-2">&lt;−5%</span>
+          <div className="w-6 h-4 bg-loss rounded-sm" />
+          <span className="text-muted">&lt;−40%</span>
         </div>
       </div>
 
@@ -114,13 +114,13 @@ export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
           <thead>
             <tr>
               {/* Corner */}
-              <th className="px-3 py-2 text-[10px] font-mono text-zinc-600 text-right w-20">
+              <th className="px-3 py-2 text-[10px] font-mono text-muted text-right w-20">
                 g \ WACC
               </th>
               {wacc_range.map((w) => (
                 <th
                   key={w}
-                  className="px-4 py-2 text-center text-[11px] font-mono font-semibold text-zinc-400 min-w-[90px]"
+                  className="px-4 py-2 text-center text-[11px] font-mono font-semibold text-secondary min-w-[90px]"
                 >
                   {w.toFixed(1)}%
                 </th>
@@ -130,7 +130,7 @@ export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
           <tbody>
             {growth_range.map((g, gi) => (
               <tr key={g}>
-                <td className="px-3 py-2 text-right text-[11px] font-mono font-semibold text-zinc-400 border-r border-border">
+                <td className="px-3 py-2 text-right text-[11px] font-mono font-semibold text-secondary border-r border-subtle">
                   {g.toFixed(1)}%
                 </td>
                 {wacc_range.map((_, wi) => {
@@ -140,11 +140,11 @@ export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
                   return (
                     <td
                       key={wi}
-                      className={`px-3 py-2.5 text-center font-number text-[13px] rounded-sm ${cellStyle}`}
+                      className={`px-3 py-2.5 text-center tabular-nums text-[13px] rounded-sm ${cellStyle}`}
                     >
                       <div>{fmtShare(value)}</div>
                       {isBase && (
-                        <div className="text-[8px] font-mono text-teal/60 mt-0.5 uppercase tracking-wider">
+                        <div className="text-[8px] font-mono text-profit/60 mt-0.5 uppercase tracking-wider">
                           base
                         </div>
                       )}
@@ -159,14 +159,14 @@ export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
 
       {/* Football Field Chart */}
       {scenarios && (
-        <div className="border-t border-border pt-5">
+        <div className="border-t border-subtle pt-5">
           <FootballField sensitivity={sensitivity} dcf={dcf} scenarios={scenarios} />
         </div>
       )}
 
       {/* Scenario cards */}
-      <div className="border-t border-border pt-5">
-        <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider mb-3">
+      <div className="border-t border-subtle pt-5">
+        <p className="text-caption font-mono text-muted uppercase tracking-label-wide mb-3">
           Quick-Read Scenarios
         </p>
         <div className="grid grid-cols-3 gap-4">
@@ -175,13 +175,13 @@ export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
               label: "Bear Case",
               waccIdx: wacc_range.length - 1,
               growthIdx: 0,
-              color: "rose",
+              color: "loss",
             },
             {
               label: "Base Case",
               waccIdx: baseWaccIdx,
               growthIdx: baseGrowthIdx,
-              color: "teal",
+              color: "accent",
             },
             {
               label: "Bull Case",
@@ -196,34 +196,34 @@ export const SensitivityTab = ({ sensitivity, dcf, scenarios }: Props) => {
               <div
                 key={s.label}
                 className={`card-elevated rounded-lg p-4 text-center border ${
-                  s.color === "teal"
-                    ? "border-teal-border"
-                    : s.color === "rose"
-                    ? "border-neg-border"
-                    : "border-border"
+                  s.color === "accent"
+                    ? "border-accent"
+                    : s.color === "loss"
+                    ? "border-loss"
+                    : "border-subtle"
                 }`}
               >
-                <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider mb-1">
+                <p className="text-caption font-mono text-muted uppercase tracking-label-wide mb-1">
                   {s.label}
                 </p>
                 <p
-                  className={`font-number text-xl font-bold ${
-                    s.color === "teal"
-                      ? "text-teal"
-                      : s.color === "rose"
-                      ? "text-negative"
-                      : "text-zinc-300"
+                  className={`tabular-nums text-xl font-semibold ${
+                    s.color === "accent"
+                      ? "text-accent"
+                      : s.color === "loss"
+                      ? "text-loss"
+                      : "text-secondary"
                   }`}
                 >
                   {fmtShare(v)}
                 </p>
-                <p className="text-[10px] font-mono text-zinc-600 mt-0.5">
+                <p className="text-caption font-mono text-muted mt-0.5">
                   WACC {wacc_range[s.waccIdx]?.toFixed(1)}% / g {growth_range[s.growthIdx]?.toFixed(1)}%
                 </p>
                 {upsidePct != null && (
                   <p
-                    className={`font-number text-xs mt-1 ${
-                      upsidePct >= 0 ? "text-teal" : "text-negative"
+                    className={`tabular-nums text-caption mt-1 ${
+                      upsidePct >= 0 ? "text-profit" : "text-loss"
                     }`}
                   >
                     {upsidePct >= 0 ? "+" : ""}{upsidePct.toFixed(1)}% vs CMP

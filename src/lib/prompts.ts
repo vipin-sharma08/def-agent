@@ -28,7 +28,7 @@ If figures are in thousands, convert (divide by 10,00,000).
    match, flag the discrepancy.
 3. Cash Flow from Operations + Investing + Financing MUST approximately equal Net Change
    in Cash. Flag if >5% discrepancy.
-4. Extract the most recent year's data. Use the FY label format "FY24" (last 2 digits of the ending calendar year).
+4. Extract 2-3 years of data using the comparative columns. Most Indian Annual Reports show current year and prior year side-by-side. Use the FY label format "FY24" (last 2 digits of the ending calendar year). Most recent year goes FIRST in every array.
 5. Use the exact terminology from the report. Indian companies use specific Ind AS terms.
 6. Clearly separate Current vs Non-Current for all assets and liabilities.
 7. If the company is a Bank/NBFC, use the banking-specific schema provided below.
@@ -47,78 +47,94 @@ Do not rename fields. Do not nest differently. Do not omit fields — use null i
   "currency": "INR Crores",
 
   "income_statement": {
-    "years": ["FY24"],
-    "revenue_from_operations": number | null,
-    "other_income": number | null,
-    "total_income": number | null,
-    "employee_benefits_expense": number | null,
-    "cost_of_materials_consumed": number | null,
-    "depreciation_and_amortisation": number | null,
-    "finance_costs": number | null,
-    "other_expenses": number | null,
-    "total_expenses": number | null,
-    "profit_before_tax": number | null,
-    "current_tax": number | null,
-    "deferred_tax": number | null,
-    "total_tax_expense": number | null,
-    "profit_after_tax": number | null,
-    "other_comprehensive_income": number | null,
-    "total_comprehensive_income": number | null,
-    "eps_basic": number | null,
-    "eps_diluted": number | null
+    "years": ["FY24", "FY23", "FY22"],
+    "revenue_from_operations": [number | null, number | null, number | null],
+    "other_income": [number | null, number | null, number | null],
+    "total_income": [number | null, number | null, number | null],
+    "employee_benefits_expense": [number | null, number | null, number | null],
+    "cost_of_materials_consumed": [number | null, number | null, number | null],
+    "depreciation_and_amortisation": [number | null, number | null, number | null],
+    "finance_costs": [number | null, number | null, number | null],
+    "other_expenses": [number | null, number | null, number | null],
+    "total_expenses": [number | null, number | null, number | null],
+    "profit_before_exceptional_items_and_tax": [number | null, number | null, number | null],
+    "profit_before_tax": [number | null, number | null, number | null],
+    "current_tax": [number | null, number | null, number | null],
+    "deferred_tax": [number | null, number | null, number | null],
+    "total_tax_expense": [number | null, number | null, number | null],
+    "profit_after_tax": [number | null, number | null, number | null],
+    "other_comprehensive_income": [number | null, number | null, number | null],
+    "total_comprehensive_income": [number | null, number | null, number | null],
+    "eps_basic": [number | null, number | null, number | null],
+    "eps_diluted": [number | null, number | null, number | null]
   },
 
   "balance_sheet": {
-    "years": ["FY24"],
-    "property_plant_equipment": number | null,
-    "right_of_use_assets": number | null,
-    "capital_work_in_progress": number | null,
-    "intangible_assets": number | null,
-    "non_current_investments": number | null,
-    "deferred_tax_assets_net": number | null,
-    "other_non_current_assets": number | null,
-    "total_non_current_assets": number | null,
-    "inventories": number | null,
-    "trade_receivables": number | null,
-    "cash_and_cash_equivalents": number | null,
-    "current_investments": number | null,
-    "other_current_assets": number | null,
-    "total_current_assets": number | null,
-    "total_assets": number | null,
-    "share_capital": number | null,
-    "reserves_and_surplus": number | null,
-    "total_equity": number | null,
-    "long_term_borrowings": number | null,
-    "lease_liabilities_non_current": number | null,
-    "deferred_tax_liabilities_net": number | null,
-    "other_non_current_liabilities": number | null,
-    "total_non_current_liabilities": number | null,
-    "short_term_borrowings": number | null,
-    "lease_liabilities_current": number | null,
-    "trade_payables": number | null,
-    "other_current_liabilities": number | null,
-    "short_term_provisions": number | null,
-    "total_current_liabilities": number | null,
-    "total_equity_and_liabilities": number | null
+    "years": ["FY24", "FY23", "FY22"],
+    "property_plant_equipment": [number | null, number | null, number | null],
+    "accumulated_depreciation": [number | null, number | null, number | null],
+    "right_of_use_assets": [number | null, number | null, number | null],
+    "capital_work_in_progress": [number | null, number | null, number | null],
+    "intangible_assets": [number | null, number | null, number | null],
+    "non_current_investments": [number | null, number | null, number | null],
+    "deferred_tax_assets_net": [number | null, number | null, number | null],
+    "other_non_current_assets": [number | null, number | null, number | null],
+    "total_non_current_assets": [number | null, number | null, number | null],
+    "inventories": [number | null, number | null, number | null],
+    "trade_receivables": [number | null, number | null, number | null],
+    "cash_and_cash_equivalents": [number | null, number | null, number | null],
+    "bank_balances_other": [number | null, number | null, number | null],
+    "current_investments": [number | null, number | null, number | null],
+    "other_current_assets": [number | null, number | null, number | null],
+    "total_current_assets": [number | null, number | null, number | null],
+    "total_assets": [number | null, number | null, number | null],
+    "share_capital": [number | null, number | null, number | null],
+    "reserves_and_surplus": [number | null, number | null, number | null],
+    "total_equity": [number | null, number | null, number | null],
+    "long_term_borrowings": [number | null, number | null, number | null],
+    "lease_liabilities_non_current": [number | null, number | null, number | null],
+    "deferred_tax_liabilities_net": [number | null, number | null, number | null],
+    "long_term_provisions": [number | null, number | null, number | null],
+    "other_non_current_liabilities": [number | null, number | null, number | null],
+    "total_non_current_liabilities": [number | null, number | null, number | null],
+    "short_term_borrowings": [number | null, number | null, number | null],
+    "lease_liabilities_current": [number | null, number | null, number | null],
+    "trade_payables": [number | null, number | null, number | null],
+    "other_current_liabilities": [number | null, number | null, number | null],
+    "short_term_provisions": [number | null, number | null, number | null],
+    "current_maturities_of_lt_debt": [number | null, number | null, number | null],
+    "total_current_liabilities": [number | null, number | null, number | null],
+    "total_equity_and_liabilities": [number | null, number | null, number | null]
   },
 
   "cash_flow_statement": {
-    "years": ["FY24"],
-    "cash_from_operating_activities": number | null,
-    "cash_from_investing_activities": number | null,
-    "capital_expenditure": number | null,
-    "cash_from_financing_activities": number | null,
-    "net_change_in_cash": number | null,
-    "opening_cash_balance": number | null,
-    "closing_cash_balance": number | null
+    "years": ["FY24", "FY23", "FY22"],
+    "cash_from_operating_activities": [number | null, number | null, number | null],
+    "cash_from_investing_activities": [number | null, number | null, number | null],
+    "capital_expenditure": [number | null, number | null, number | null],
+    "cash_from_financing_activities": [number | null, number | null, number | null],
+    "net_change_in_cash": [number | null, number | null, number | null],
+    "opening_cash_balance": [number | null, number | null, number | null],
+    "closing_cash_balance": [number | null, number | null, number | null]
   }
 }
 
 RULES:
-- "years" array format: short FY label e.g. "FY24" for the year ending March 2024
-- All number values are plain scalars (not arrays), in ₹ Crores
-- Use null (not 0, not "N/A") for any line item not found in the report
+- "years" array: most recent year FIRST, e.g. ["FY24", "FY23", "FY22"] for year ending March 2024
+- All number values MUST be arrays with one element per year (same length as "years")
+- Use null within the array (not 0, not "N/A") for any line item not found in the report
+- Example: if prior year data is missing: [128933, null, null]
 - Do not add extra fields beyond what is listed above
+
+CRITICAL FORMAT RULES:
+- ALL financial values MUST be arrays with one value per year, matching the "years" array length
+- Example: if years is ["FY24", "FY23"], then revenue_from_operations MUST be [128933, 124014]
+- NEVER return a bare number like revenue_from_operations: 128933
+- ALWAYS return an array like revenue_from_operations: [128933, 124014]
+- Extract MINIMUM 2-3 years of data. Check the comparative columns in the financial statements.
+- Annual reports ALWAYS have at least 2 years (current + prior year comparative). Find both.
+- If only 1 year is found, still wrap it in an array: [128933]
+- null values in arrays: [128933, null, null] if prior years not found
 </output_schema>
 
 <banking_note>

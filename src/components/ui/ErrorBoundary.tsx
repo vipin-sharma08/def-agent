@@ -66,7 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
 
           {/* Heading */}
-          <h1 className="font-sans text-2xl font-bold text-zinc-100 text-center mb-2">
+          <h1 className="text-heading text-primary text-center mb-2">
             Something went wrong
           </h1>
           <p className="text-sm text-zinc-500 text-center mb-8 leading-relaxed">
@@ -95,17 +95,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
           {/* Actions */}
           <div className="flex gap-3">
-            <button
-              onClick={this.handleGoHome}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-border text-zinc-400 hover:text-zinc-100 text-sm font-semibold rounded-md transition-colors"
-            >
+            <button onClick={this.handleGoHome} className="valk-button-secondary flex-1">
               <Home size={14} />
               Go to Upload
             </button>
-            <button
-              onClick={this.handleReload}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-teal hover:bg-teal-bright text-[#0A0A0A] text-sm font-semibold rounded-md transition-colors glow-teal"
-            >
+            <button onClick={this.handleReload} className="valk-button-primary flex-1">
               <RefreshCw size={14} />
               Reload Page
             </button>

@@ -1,131 +1,202 @@
-// src/lib/formatters.ts
-// ═══════════════════════════════════════════════════════════════════
-// PROJECT VALKYRIE — Canonical Display Formatters
-//
-// All formatting logic lives here.  Do NOT duplicate these helpers
-// inline in components — import from this module instead.
-// ═══════════════════════════════════════════════════════════════════
+const INR_CURRENCY = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
-import { INDIAN_NUMBER_FORMAT, formatCrores } from "@/lib/constants";
+const INR_INTEGER = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
 
-// Re-export primitives so consumers only need one import
-export { formatCrores, formatPercent, formatMultiple } from "@/lib/constants";
+const INR_DECIMAL = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
 
-// ─── Core Indian number engine ─────────────────────────────────────
+export type CellFormat =
+  | "currency"
+  | "percent"
+  | "eps"
+  | "days"
+  | "times"
+  | "factor"
+  | "integer";
 
-/**
- * Formats a raw number with Indian grouping and ₹ prefix.
- * Example: formatINR(1245678.5) → "₹12,45,678.50"
- */
-export const formatINR = (value: number, decimals = 2): string => {
-  if (!isFinite(value)) return "—";
-  return INDIAN_NUMBER_FORMAT(value, decimals);
-};
-
-// ─── ₹ per share formatter ─────────────────────────────────────────
-
-/**
- * Formats a per-share value with 2 decimal places.
- * Example: fmtShare(1234.56) → "₹1,234.56"
- *          fmtShare(-50)      → "−₹50.00"
- *          fmtShare(null)     → "—"
- */
-export const fmtShare = (v: number | null | undefined): string => {
-  if (v == null || !isFinite(v)) return "—";
-  return INDIAN_NUMBER_FORMAT(v, 2);
-};
-
-// ─── ₹ Crore formatter ────────────────────────────────────────────
-
-/**
- * Formats a value in ₹ Crores with optional decimals.
- * Example: fmtCrore(12345.6)   → "₹12,345.60 Cr"
- *          fmtCrore(-1000, 0)  → "−₹1,000 Cr"
- *          fmtCrore(null)      → "—"
- */
-export const fmtCrore = (
-  v: number | null | undefined,
+export const formatIndianNumber = (
+  value: number | null | undefined,
   decimals = 0
 ): string => {
-  if (v == null || !isFinite(v)) return "—";
-  return formatCrores(v, decimals);
+  if (value == null || !Number.isFinite(value)) return "—";
+
+  return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
 };
 
-// ─── Table cell formatter ─────────────────────────────────────────
-
-export type CellFormat = "currency" | "percent" | "eps" | "days" | "times";
-
-/**
- * Formats a table cell value based on format type.
- * Used by FinancialTable and report tab components.
- */
-export const fmtCell = (
-  val: number | null | undefined,
-  fmt: CellFormat = "currency"
+export const formatINR = (
+  value: number | null | undefined,
+  decimals = 2
 ): string => {
-  if (val == null || !isFinite(val as number)) return "—";
-  switch (fmt) {
+  if (value == null || !Number.isFinite(value)) return "—";
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+};
+
+export const formatCrore = (
+  value: number | null | undefined,
+  decimals = 1
+): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `₹ ${new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value / 10000000)} Cr`;
+};
+
+export const formatLakh = (
+  value: number | null | undefined,
+  decimals = 1
+): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `₹ ${new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value / 100000)} L`;
+};
+
+export const fmtShare = (value: number | null | undefined): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return INR_CURRENCY.format(value);
+};
+
+export const fmtCrore = (
+  value: number | null | undefined,
+  decimals = 0
+): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `₹ ${new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value)} Cr`;
+};
+
+export const formatPercent = (
+  value: number | null | undefined,
+  decimals = 1
+): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(decimals)}%`;
+};
+
+export const formatSignedPercent = (
+  value: number | null | undefined,
+  decimals = 1
+): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toFixed(decimals)}%`;
+};
+
+export const formatMultiple = (
+  value: number | null | undefined,
+  decimals = 1
+): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(decimals)}x`;
+};
+
+export const formatFYLabel = (
+  year: string | number | null | undefined,
+  estimated = false
+): string => {
+  if (year == null) return "—";
+
+  const raw = String(year).trim();
+  if (raw.startsWith("FY")) return raw;
+
+  const numeric = Number.parseInt(raw.replace(/[^\d]/g, ""), 10);
+  if (!Number.isFinite(numeric)) return raw;
+
+  const fy = `FY${String(numeric).slice(-2).padStart(2, "0")}`;
+  return estimated ? `${fy}E` : fy;
+};
+
+export const formatCell = (
+  value: number | null | undefined,
+  format: CellFormat = "currency"
+): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
+
+  switch (format) {
     case "currency":
-      return INDIAN_NUMBER_FORMAT(val, 2);
+      return INR_INTEGER.format(value);
     case "percent":
-      return `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`;
+      return formatPercent(value, 1);
     case "eps":
-      return `₹ ${val.toFixed(2)}`;
+      return formatINR(value, 2);
     case "days":
-      return `${Math.round(val)}d`;
+      return `${Math.round(value)}d`;
     case "times":
-      return `${val.toFixed(1)}x`;
+      return formatMultiple(value, 1);
+    case "factor":
+      return INR_DECIMAL.format(value);
+    case "integer":
+      return INR_INTEGER.format(value);
     default:
-      return String(val);
+      return INR_DECIMAL.format(value);
   }
 };
 
-// ─── Growth / direction ────────────────────────────────────────────
+export const fmtCell = formatCell;
 
-/**
- * Computes period-over-period growth and returns a directional string.
- * Example: fmtGrowth(120, 100) → "↑ 20.0%"
- */
-export const fmtGrowth = (current: number, previous: number): string => {
-  if (!isFinite(current) || !isFinite(previous) || previous === 0) return "—";
-  const pct = ((current - previous) / Math.abs(previous)) * 100;
-  const abs = Math.abs(pct).toFixed(1);
-  if (pct > 0) return `↑ ${abs}%`;
-  if (pct < 0) return `↓ ${abs}%`;
-  return `→ 0.0%`;
+export const fmtGrowth = (
+  current: number | null | undefined,
+  previous: number | null | undefined
+): string => {
+  if (
+    current == null ||
+    previous == null ||
+    !Number.isFinite(current) ||
+    !Number.isFinite(previous) ||
+    previous === 0
+  ) {
+    return "—";
+  }
+
+  return formatSignedPercent(((current - previous) / Math.abs(previous)) * 100, 1);
 };
 
-// ─── Tailwind colour helpers ───────────────────────────────────────
-
-/**
- * Returns a Tailwind text-colour class for a positive/negative value.
- * Uses the new muted teal / rose palette.
- */
 export const getValueColor = (value: number | null | undefined): string => {
-  if (value == null || !isFinite(value) || value === 0)
-    return "text-zinc-500";
-  return value > 0 ? "text-teal" : "text-negative";
+  if (value == null || !Number.isFinite(value) || value === 0) return "text-secondary";
+  return value > 0 ? "text-profit" : "text-loss";
 };
 
-/** Same but for growth values (positive growth = good). */
-export const getGrowthColor = (value: number | null | undefined): string =>
-  getValueColor(value);
+export const getGrowthColor = getValueColor;
 
-/**
- * Returns a Tailwind text-colour for a cell value relative to zero.
- * For income-statement cells: losses are negative, income is positive.
- */
 export const getCellValueColor = (
   value: number | null | undefined,
   inverted = false
 ): string => {
-  if (value == null || !isFinite(value as number)) return "text-zinc-500";
-  const isPositive = inverted ? value < 0 : value > 0;
-  if (value === 0) return "text-zinc-500";
-  return isPositive ? "text-positive" : "text-negative";
+  if (value == null || !Number.isFinite(value) || value === 0) return "text-secondary";
+  const positive = inverted ? value < 0 : value > 0;
+  return positive ? "text-profit" : "text-loss";
 };
 
-// ─── Legacy aliases (keep until components are migrated) ──────────
+export const formatCompactINR = (
+  value: number | null | undefined
+): string => {
+  if (value == null || !Number.isFinite(value)) return "—";
 
-/** @deprecated Use fmtGrowth */
-export const formatGrowth = fmtGrowth;
+  const abs = Math.abs(value);
+  if (abs >= 10000000) return formatCrore(value, 1);
+  if (abs >= 100000) return formatLakh(value, 1);
+  return INR_CURRENCY.format(value);
+};

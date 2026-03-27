@@ -1,122 +1,137 @@
 "use client";
 
-// EV-to-Equity Bridge Waterfall
-// Shows: PV FCFFs + PV TV = EV − Net Debt + Non-Op = Equity Value
-
 import {
-  BarChart,
   Bar,
+  BarChart,
+  Cell,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  Cell,
-  ResponsiveContainer,
-  ReferenceLine,
 } from "recharts";
+import { fmtCrore } from "@/lib/formatters";
 import type { DcfValuation } from "@/lib/types";
+import { chartTheme } from "@/components/charts/ChartTheme";
 
 interface Props {
   dcf: DcfValuation;
 }
 
-interface BridgeItem {
-  name: string;
+interface BridgePoint {
+  label: string;
   value: number;
   base: number;
-  bar: number;
-  isTotal: boolean;
+  size: number;
   isPositive: boolean;
+  isTotal: boolean;
 }
 
-function buildBridgeData(dcf: DcfValuation): BridgeItem[] {
-  const pvFcffs   = dcf.sum_pv_fcffs;
-  const pvTV      = dcf.terminal_value.terminal_value_discounted;
-  const ev        = dcf.enterprise_value;
-  const netDebt   = dcf.less_net_debt;
-  const nonOp     = dcf.plus_non_operating_assets;
-  const equity    = dcf.equity_value;
+function buildBridgeData(dcf: DcfValuation): BridgePoint[] {
+  const pvFcffs = dcf.sum_pv_fcffs;
+  const pvTv = dcf.terminal_value.terminal_value_discounted;
+  const enterpriseValue = dcf.enterprise_value;
+  const netDebt = Math.abs(dcf.less_net_debt);
+  const nonOperatingAssets = dcf.plus_non_operating_assets;
+  const equityValue = dcf.equity_value;
 
-  const items: BridgeItem[] = [];
+  const rows: BridgePoint[] = [
+    {
+      label: "PV FCFFs",
+      value: pvFcffs,
+      base: 0,
+      size: Math.abs(pvFcffs),
+      isPositive: pvFcffs >= 0,
+      isTotal: false,
+    },
+    {
+      label: "PV TV",
+      value: pvTv,
+      base: pvFcffs,
+      size: Math.abs(pvTv),
+      isPositive: pvTv >= 0,
+      isTotal: false,
+    },
+    {
+      label: "EV",
+      value: enterpriseValue,
+      base: 0,
+      size: Math.abs(enterpriseValue),
+      isPositive: enterpriseValue >= 0,
+      isTotal: true,
+    },
+    {
+      label: "−Net Debt",
+      value: -netDebt,
+      base: enterpriseValue - netDebt,
+      size: netDebt,
+      isPositive: false,
+      isTotal: false,
+    },
+  ];
 
-  // PV of FCFFs
-  items.push({ name: "PV FCFFs", value: pvFcffs, base: 0, bar: pvFcffs, isTotal: false, isPositive: true });
-
-  // PV of TV
-  items.push({ name: "PV TV", value: pvTV, base: pvFcffs, bar: pvTV, isTotal: false, isPositive: true });
-
-  // EV (total)
-  items.push({ name: "EV", value: ev, base: 0, bar: ev, isTotal: true, isPositive: true });
-
-  // Less Net Debt
-  let running = ev;
-  const debtAbs = Math.abs(netDebt);
-  items.push({ name: "−Net Debt", value: -debtAbs, base: running - debtAbs, bar: debtAbs, isTotal: false, isPositive: false });
-  running -= debtAbs;
-
-  // Plus Non-Op Assets
-  if (nonOp > 0) {
-    items.push({ name: "+Non-Op", value: nonOp, base: running, bar: nonOp, isTotal: false, isPositive: true });
-    running += nonOp;
+  if (nonOperatingAssets !== 0) {
+    rows.push({
+      label: "+Non-op",
+      value: nonOperatingAssets,
+      base: enterpriseValue - netDebt,
+      size: Math.abs(nonOperatingAssets),
+      isPositive: nonOperatingAssets >= 0,
+      isTotal: false,
+    });
   }
 
-  // Equity Value (total)
-  items.push({ name: "Equity", value: equity, base: 0, bar: Math.abs(equity), isTotal: true, isPositive: equity >= 0 });
+  rows.push({
+    label: "Equity",
+    value: equityValue,
+    base: 0,
+    size: Math.abs(equityValue),
+    isPositive: equityValue >= 0,
+    isTotal: true,
+  });
 
-  return items;
+  return rows;
 }
-
-function fmtCr(v: number): string {
-  if (!isFinite(v)) return "—";
-  return `₹${Math.round(Math.abs(v)).toLocaleString("en-IN")} Cr`;
-}
-
-const COLORS = {
-  positive: "#14B8A6",
-  negative: "#F43F5E",
-  total: "#3B82F6",
-};
 
 export const EvBridgeWaterfall = ({ dcf }: Props) => {
   const data = buildBridgeData(dcf);
 
   return (
-    <div>
-      <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider mb-3">
-        Enterprise Value → Equity Bridge
+    <div className="space-y-3">
+      <p className="text-caption uppercase tracking-[0.12em] text-muted">
+        Enterprise Value to Equity
       </p>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 12 }}>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
           <XAxis
-            dataKey="name"
-            tick={{ fill: "#71717A", fontSize: 10, fontFamily: "var(--font-mono)" }}
+            dataKey="label"
             axisLine={false}
             tickLine={false}
+            tick={{ fill: chartTheme.axis, fontSize: 12 }}
           />
           <YAxis hide />
+          <ReferenceLine y={0} stroke={chartTheme.grid} />
           <Tooltip
             cursor={false}
-            contentStyle={{
-              background: "#162336",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 8,
-              fontSize: 11,
-              fontFamily: "var(--font-mono)",
+            contentStyle={chartTheme.tooltip}
+            formatter={(_value, _name, item) => {
+              const payload = item.payload as BridgePoint;
+              return [fmtCrore(payload.value, 0), payload.label];
             }}
-            formatter={(_val, _name, props) => {
-              const idx = (props as unknown as { index: number }).index ?? 0;
-              const item = data[idx];
-              return [fmtCr(item?.value ?? 0), ""];
-            }}
-            labelStyle={{ color: "#A1A1AA" }}
+            labelStyle={{ color: chartTheme.label }}
           />
-          <ReferenceLine y={0} stroke="rgba(255,255,255,0.06)" />
-          <Bar dataKey="base" stackId="a" fill="transparent" isAnimationActive={false} />
-          <Bar dataKey="bar" stackId="a" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-            {data.map((d, i) => (
+          <Bar dataKey="base" stackId="bridge" fill="transparent" isAnimationActive={false} />
+          <Bar dataKey="size" stackId="bridge" radius={[6, 6, 0, 0]}>
+            {data.map((item) => (
               <Cell
-                key={i}
-                fill={d.isTotal ? COLORS.total : d.isPositive ? COLORS.positive : COLORS.negative}
-                opacity={d.isTotal ? 0.9 : 0.7}
+                key={item.label}
+                fill={
+                  item.isTotal
+                    ? chartTheme.accent
+                    : item.isPositive
+                      ? chartTheme.profit
+                      : chartTheme.loss
+                }
               />
             ))}
           </Bar>

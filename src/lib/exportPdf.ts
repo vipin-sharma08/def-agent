@@ -19,19 +19,19 @@ interface DocAT extends jsPDF {
   lastAutoTable: { finalY: number };
 }
 
-// ─── Color palette (matches design token system) ──────────────────
+// ─── Color palette (matches codex.md Valkyrie design tokens) ──────
 
-const CN:  RGB = [10,  10,  10 ]; // bg-base     #0A0A0A
-const CP:  RGB = [22,  22,  22 ]; // bg-elevated #161616
-const CE:  RGB = [20,  184, 166]; // teal        #14B8A6
-const CB:  RGB = [161, 161, 170]; // zinc-400    #A1A1AA
-const CT:  RGB = [212, 212, 216]; // zinc-300    #D4D4D8
-const CM:  RGB = [82,  82,  91 ]; // zinc-600    #52525B
-const CPJ: RGB = [10,  10,  10 ]; // projected col bg (base)
-const CHS: RGB = [17,  17,  17 ]; // historical col header (surface)
-const CTT: RGB = [22,  22,  22 ]; // total row bg (elevated)
-const CST: RGB = [17,  17,  17 ]; // subtotal row bg (surface)
-const CSH: RGB = [10,  10,  10 ]; // section header row bg (base)
+const CN:  RGB = [5,   5,   9  ]; // --valk-bg-app         #050509
+const CP:  RGB = [24,  24,  35 ]; // --valk-bg-surface-alt #181823
+const CE:  RGB = [10,  132, 255]; // --valk-accent         #0A84FF
+const CB:  RGB = [176, 176, 179]; // --valk-text-secondary  ~70% of #F5F5F7
+const CT:  RGB = [245, 245, 247]; // --valk-text-primary   #F5F5F7
+const CM:  RGB = [110, 110, 115]; // --valk-text-muted     ~45% of #F5F5F7
+const CPJ: RGB = [5,   5,   9  ]; // projected col bg (app)
+const CHS: RGB = [17,  17,  23 ]; // --valk-bg-surface     #111117
+const CTT: RGB = [24,  24,  35 ]; // total row bg (surface-alt)
+const CST: RGB = [17,  17,  23 ]; // subtotal row bg (surface)
+const CSH: RGB = [5,   5,   9  ]; // section header row bg (app)
 
 // ─── Page constants ───────────────────────────────────────────────
 
@@ -204,7 +204,7 @@ function metricRow(label: string, values: string[]): BodyRow {
     { content: label, styles: { fillColor: CPJ, textColor: CM, fontStyle: "italic" } },
     ...values.map<CellVal>((v) => {
       const num = parseFloat(v.replace("%", "").replace("(", "-").replace(")", ""));
-      const color: RGB = !isNaN(num) && num < 0 ? [243, 113, 136] : CE;
+      const color: RGB = !isNaN(num) && num < 0 ? [242, 54, 69] : CE;
       return { content: v, styles: { fillColor: CPJ, textColor: color, fontStyle: "bold" } };
     }),
   ];
@@ -418,7 +418,7 @@ function buildExecSummary(
 
   if (dcf.upside_downside_pct != null) {
     const up = dcf.upside_downside_pct;
-    const col: RGB = up >= 0 ? CE : [243, 113, 136];
+    const col: RGB = up >= 0 ? CE : [242, 54, 69];
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...col);
@@ -549,7 +549,6 @@ function buildIncomeStatement(
   // Build hist COGS + derived metrics
   const histCogs  = is.cost_of_materials_consumed.map((v, i) =>
     v + is.purchase_of_stock_in_trade[i] + is.changes_in_inventories[i]);
-  const histGP    = is.revenue_from_operations.map((v, i) => v - histCogs[i]);
   const histEBITDA = is.profit_before_tax.map((v, i) =>
     v + is.finance_costs[i] + is.depreciation_and_amortisation[i]);
   const histEBIT   = histEBITDA.map((v, i) => v - is.depreciation_and_amortisation[i]);
@@ -638,7 +637,6 @@ function buildBalanceSheet(
   const y0 = newPage(doc, TITLE);
 
   function hv(arr: number[]) { return [...arr.map(fc), ...Array<string>(nP).fill("")]; }
-  function pv(arr: number[]) { return [...Array<string>(nH).fill(""), ...arr.map(fc)]; }
   function hp(hist: number[], projected: number[]) { return [...hist.map(fc), ...projected.map(fc)]; }
 
   const nca = bs.assets.non_current;
@@ -938,13 +936,13 @@ function buildSensitivity(doc: jsPDF, model: FinancialModel): void {
     (b, g, i) => Math.abs(g - dcf.terminal_value.terminal_growth_rate) < Math.abs(growth_range[b] - dcf.terminal_value.terminal_growth_rate) ? i : b, 0);
 
   function getSensColor(upside: number): RGB {
-    if (upside > 40)  return [5,  100, 60 ];
-    if (upside > 20)  return [8,  120, 75 ];
-    if (upside > 5)   return [12, 140, 90 ];
-    if (upside > -5)  return [30, 45,  70 ];
-    if (upside > -20) return [120, 30, 50 ];
-    if (upside > -40) return [150, 20, 40 ];
-    return [170, 10, 30];
+    if (upside > 40)  return [4,  77, 65 ];  // deep profit green
+    if (upside > 20)  return [6,  102, 86 ];
+    if (upside > 5)   return [8,  128, 108];
+    if (upside > -5)  return [31, 36, 48 ];  // neutral (--valk-bg-tertiary range)
+    if (upside > -20) return [121, 27, 35 ];
+    if (upside > -40) return [162, 36, 46 ];
+    return [193, 43, 55];                     // deep loss red
   }
 
   // Description label
@@ -970,7 +968,7 @@ function buildSensitivity(doc: jsPDF, model: FinancialModel): void {
       const upside = ((value - reference) / Math.abs(reference)) * 100;
       const isBase = gi === baseGIdx && wi === baseWaccIdx;
       const bg     = isBase ? CE : getSensColor(upside);
-      const tc: RGB = isBase ? [10, 22, 40] : [220, 235, 255];
+      const tc: RGB = isBase ? [5, 5, 9] : [245, 245, 247];
       row.push({
         content: fc(value),
         styles:  { fillColor: bg, textColor: tc, fontStyle: isBase ? "bold" : "normal", halign: "center" },
@@ -1001,7 +999,7 @@ function buildSensitivity(doc: jsPDF, model: FinancialModel): void {
   // Bear / Base / Bull cards
   const cardW = (PW - ML - MR - 8) / 3;
   const scenarios = [
-    { label: "Bear Case",  waccIdx: wacc_range.length - 1, gIdx: 0,                   color: [120, 30, 50] as RGB },
+    { label: "Bear Case",  waccIdx: wacc_range.length - 1, gIdx: 0,                   color: [242, 54, 69] as RGB },
     { label: "Base Case",  waccIdx: baseWaccIdx,            gIdx: baseGIdx,             color: CE },
     { label: "Bull Case",  waccIdx: 0,                      gIdx: growth_range.length - 1, color: CB },
   ];
@@ -1022,7 +1020,7 @@ function buildSensitivity(doc: jsPDF, model: FinancialModel): void {
     if (up != null) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(6.5);
-      doc.setTextColor(...(up >= 0 ? CE : [243, 113, 136] as RGB));
+      doc.setTextColor(...(up >= 0 ? CE : [242, 54, 69] as RGB));
       doc.text(`${up >= 0 ? "+" : ""}${up.toFixed(1)}% vs CMP`, cx + cardW / 2, afterGrid + 19, { align: "center" });
     }
   });

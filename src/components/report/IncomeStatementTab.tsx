@@ -20,8 +20,6 @@ function buildRows(
   is: IncomeStatement,
   proj: ProjectedIncomeStatement
 ): ReportRow[] {
-  const h = (is.years ?? []).length;
-
   // Helper: merge historical + projected arrays
   const merge = <T,>(hist: T[], prj: T[]): T[] => [...hist, ...prj];
 

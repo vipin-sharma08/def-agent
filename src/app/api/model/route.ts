@@ -6,10 +6,29 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { NextResponse } from "next/server";
+import { MODELLING_SYSTEM_PROMPT } from "@/lib/prompts";
 
 export const maxDuration = 180; // seconds — required for Vercel Pro/Enterprise timeout
 
 const TIMEOUT_MS = 180_000; // 3 minutes
+
+function unwrapModelPayload(raw: unknown): unknown {
+  if (Array.isArray(raw)) {
+    const first = raw[0];
+    if (first && typeof first === "object") {
+      const obj = first as Record<string, unknown>;
+      return obj.modelData ?? obj.model_data ?? obj;
+    }
+    return raw;
+  }
+
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    return obj.modelData ?? obj.model_data ?? obj;
+  }
+
+  return raw;
+}
 
 export async function POST(request: Request) {
   const webhookUrl = process.env.N8N_WEBHOOK_URL_MODEL;
@@ -20,9 +39,9 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: unknown;
+  let body: { extracted_data?: unknown; assumptions?: unknown };
   try {
-    body = await request.json();
+    body = await request.json() as { extracted_data?: unknown; assumptions?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
@@ -34,7 +53,11 @@ export async function POST(request: Request) {
     const n8nRes = await fetch(webhookUrl, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(body),
+      body:    JSON.stringify({
+        extracted_data: body.extracted_data,
+        assumptions:    body.assumptions,
+        system_prompt:  MODELLING_SYSTEM_PROMPT,
+      }),
       signal:  controller.signal,
     });
 
@@ -55,7 +78,8 @@ export async function POST(request: Request) {
     }
 
     const data: unknown = await n8nRes.json();
-    return NextResponse.json(data);
+    const unwrapped = unwrapModelPayload(data);
+    return NextResponse.json(unwrapped);
   } catch (err) {
     clearTimeout(timeoutId);
 

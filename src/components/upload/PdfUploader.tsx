@@ -32,8 +32,12 @@ const PROGRESS_STEPS = [
 function humanizeError(raw: string): string {
   const lower = raw.toLowerCase();
 
-  if (lower.includes("timed out") || lower.includes("504") || lower.includes("timeout")) {
-    return "The report is very large. Extraction timed out - please try a shorter report or try again.";
+  if (lower.includes("timed out") || lower.includes("504") || lower.includes("timeout") || lower.includes("function_invocation_timeout")) {
+    return "The report is very large. Extraction timed out — please try a shorter report or try again.";
+  }
+
+  if (lower.includes("413") || lower.includes("payload too large") || lower.includes("body exceeded") || lower.includes("entity too large")) {
+    return "The PDF is too large for the server to process. Please try a report under 3 MB, or use a compressed version.";
   }
 
   if (lower.includes("502") || lower.includes("extraction service")) {
@@ -46,6 +50,10 @@ function humanizeError(raw: string): string {
 
   if (lower.includes("invalid json") || lower.includes("unexpected token")) {
     return "The server returned an unexpected response. Please try again.";
+  }
+
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("network error") || lower.includes("load failed")) {
+    return "Network error — please check your internet connection and try again.";
   }
 
   return raw;
@@ -157,13 +165,43 @@ export const PdfUploader = () => {
       }
 
       const base64 = await toBase64(selectedFile);
+
+      // Vercel serverless functions have a ~4.5 MB request body limit.
+      // Base64 encoding inflates size by ~33%, so warn early.
+      const estimatedPayloadMb = (base64.length * 1.02) / (1024 * 1024);
+      if (estimatedPayloadMb > 4.2) {
+        throw new Error(
+          "413 — PDF payload too large for the server. Please try a compressed or shorter PDF (under ~3 MB)."
+        );
+      }
+
       const response = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pdf: base64, filename: selectedFile.name }),
       });
 
-      const raw = (await response.json()) as unknown;
+      // Parse response — handle non-JSON responses (e.g., Vercel HTML error pages)
+      let raw: unknown;
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        raw = await response.json();
+      } else {
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(
+            text.includes("FUNCTION_INVOCATION_TIMEOUT")
+              ? "504 — Function timed out"
+              : `Extraction failed (${response.status})`
+          );
+        }
+        try {
+          raw = JSON.parse(text);
+        } catch {
+          throw new Error(`Extraction failed (${response.status}) — unexpected response format`);
+        }
+      }
+
       if (!response.ok) {
         const errorResponse = raw as { error?: string };
         throw new Error(errorResponse.error ?? `Extraction failed (${response.status})`);

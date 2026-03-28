@@ -28,12 +28,12 @@ interface BridgePoint {
 }
 
 function buildBridgeData(dcf: DcfValuation): BridgePoint[] {
-  const pvFcffs = dcf.sum_pv_fcffs;
-  const pvTv = dcf.terminal_value.terminal_value_discounted;
-  const enterpriseValue = dcf.enterprise_value;
-  const netDebt = Math.abs(dcf.less_net_debt);
-  const nonOperatingAssets = dcf.plus_non_operating_assets;
-  const equityValue = dcf.equity_value;
+  const pvFcffs = dcf.sum_pv_fcffs ?? 0;
+  const pvTv = dcf.terminal_value?.terminal_value_discounted ?? 0;
+  const enterpriseValue = dcf.enterprise_value ?? 0;
+  const netDebt = Math.abs(dcf.less_net_debt ?? 0);
+  const nonOperatingAssets = dcf.plus_non_operating_assets ?? 0;
+  const equityValue = dcf.equity_value ?? 0;
 
   const rows: BridgePoint[] = [
     {

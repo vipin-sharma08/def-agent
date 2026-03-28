@@ -47,59 +47,62 @@ export function normalizeFinancialModelYears(
   extractedData: ExtractedData
 ): FinancialModel {
   const historicalYears = [
-    ...(extractedData.income_statement.years ?? []),
-    ...(extractedData.balance_sheet.years ?? []),
-    ...(extractedData.cash_flow_statement.years ?? []),
+    ...(extractedData.income_statement?.years ?? []),
+    ...(extractedData.balance_sheet?.years ?? []),
+    ...(extractedData.cash_flow_statement?.years ?? []),
   ];
 
   const projectedYears = buildProjectedYearLabels(
     historicalYears,
-    model.income_statement_projected.years
+    model.income_statement_projected?.years ?? []
   );
+
+  // Guard all nested accesses — the AI model response may omit sections
+  const schedules = model.schedules ?? {} as FinancialModel["schedules"];
 
   return {
     ...model,
     income_statement_projected: {
-      ...model.income_statement_projected,
+      ...(model.income_statement_projected ?? {}),
       years: projectedYears,
     },
     balance_sheet_projected: {
-      ...model.balance_sheet_projected,
+      ...(model.balance_sheet_projected ?? {}),
       years: projectedYears,
     },
     cash_flow_projected: {
-      ...model.cash_flow_projected,
+      ...(model.cash_flow_projected ?? {}),
       years: projectedYears,
     },
     schedules: {
-      ...model.schedules,
+      ...schedules,
       working_capital: {
-        ...model.schedules.working_capital,
+        ...(schedules.working_capital ?? {}),
         years: projectedYears,
       },
       depreciation_and_capex: {
-        ...model.schedules.depreciation_and_capex,
+        ...(schedules.depreciation_and_capex ?? {}),
         years: projectedYears,
       },
       debt: {
-        ...model.schedules.debt,
+        ...(schedules.debt ?? {}),
         years: projectedYears,
       },
       equity: {
-        ...model.schedules.equity,
+        ...(schedules.equity ?? {}),
         years: projectedYears,
       },
       tax: {
-        ...model.schedules.tax,
+        ...(schedules.tax ?? {}),
         years: projectedYears,
       },
     },
     dcf_valuation: {
-      ...model.dcf_valuation,
+      ...(model.dcf_valuation ?? {}),
       fcff: {
-        ...model.dcf_valuation.fcff,
+        ...(model.dcf_valuation?.fcff ?? {}),
         years: projectedYears,
       },
     },
-  };
+  } as FinancialModel;
 }

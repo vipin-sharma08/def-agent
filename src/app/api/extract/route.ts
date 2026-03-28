@@ -41,6 +41,9 @@ export async function POST(request: Request) {
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: EXTRACTION_SYSTEM_PROMPT,
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
     });
 
     const result = await model.generateContent([

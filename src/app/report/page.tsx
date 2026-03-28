@@ -164,7 +164,18 @@ export default function ReportPage() {
         }),
       });
 
-      const raw = (await res.json()) as unknown;
+      const contentType = res.headers.get("content-type") ?? "";
+      let raw: unknown;
+      if (contentType.includes("application/json")) {
+        raw = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(
+          text.includes("FUNCTION_INVOCATION_TIMEOUT")
+            ? "Model generation timed out. Try simpler assumptions or retry."
+            : `Server error (${res.status}): ${text.slice(0, 150)}`
+        );
+      }
       const maybeErr = raw as { error?: string };
       if (!res.ok || maybeErr.error) {
         throw new Error(maybeErr.error ?? `Server error ${res.status}`);

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { fmtShare, formatSignedPercent } from "@/lib/formatters";
+import { formatSignedPercent } from "@/lib/formatters";
 import type { DcfValuation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -50,30 +50,29 @@ export const ValuationHeroCard = ({ dcf }: { dcf: DcfValuation }) => {
       transition={{ type: "spring", stiffness: 260, damping: 26 }}
       className="hero-glow relative overflow-hidden rounded-[var(--valk-radius-xl)]"
     >
-      <div className="glass relative space-y-6 p-6">
-        <div className="space-y-2">
-          <p className="text-caption uppercase tracking-label-wide text-muted">
-            Intrinsic Value
-          </p>
-          <p className="text-display tabular-nums text-primary">{fmtShare(dcf.per_share_value)}</p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1">
-            <p className="text-caption uppercase tracking-label text-muted">Margin of Safety</p>
-            <p className={cn("text-heading tabular-nums", toneClass)}>
-              {marginOfSafety == null ? "—" : formatSignedPercent(marginOfSafety, 1)}
-            </p>
+      <div className="glass relative space-y-4 p-5">
+        {(marginOfSafety != null || upside != null) && (
+          <div className={cn("grid gap-4", marginOfSafety != null && upside != null ? "md:grid-cols-2" : "md:grid-cols-1")}>
+            {marginOfSafety != null && (
+              <div className="space-y-1">
+                <p className="text-caption uppercase tracking-label text-muted">Margin of Safety</p>
+                <p className={cn("text-heading tabular-nums", toneClass)}>
+                  {formatSignedPercent(marginOfSafety, 1)}
+                </p>
+              </div>
+            )}
+            {upside != null && (
+              <div className="space-y-1">
+                <p className="text-caption uppercase tracking-label text-muted">Upside / Downside</p>
+                <p className={cn("text-heading tabular-nums", toneClass)}>
+                  {formatSignedPercent(upside, 1)}
+                </p>
+              </div>
+            )}
           </div>
-          <div className="space-y-1">
-            <p className="text-caption uppercase tracking-label text-muted">Upside / Downside</p>
-            <p className={cn("text-heading tabular-nums", toneClass)}>
-              {upside == null ? "—" : formatSignedPercent(upside, 1)}
-            </p>
-          </div>
-        </div>
+        )}
 
-        <div className="space-y-3 border-t border-subtle pt-4">
+        <div className={cn("space-y-3", (marginOfSafety != null || upside != null) && "border-t border-subtle pt-4")}>
           <div className="flex items-center justify-between gap-4">
             <p className="text-caption uppercase tracking-label text-muted">Valuation Zone</p>
             <p className="text-caption text-muted">{SEGMENTS[zoneIndex]}</p>

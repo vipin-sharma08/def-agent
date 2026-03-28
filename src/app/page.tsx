@@ -78,12 +78,8 @@ export default function HomePage() {
 
         {/* Badge */}
         <motion.div {...fadeUp(0)} className="mb-8">
-          <span className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent-muted px-4 py-1.5">
-            <span
-              className="h-1.5 w-1.5 rounded-full bg-accent"
-              style={{ boxShadow: "0 0 6px var(--valk-accent)" }}
-            />
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
+          <span className="inline-flex items-center gap-2 rounded-full border border-subtle bg-surface-alt px-4 py-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">
               AI-Powered · Indian Equities · FCFF Method
             </span>
           </span>
@@ -190,36 +186,28 @@ export default function HomePage() {
                     delay: index * 0.06,
                     ease: [0.25, 0.8, 0.25, 1],
                   }}
-                  className="card group relative flex flex-col gap-4 p-5 transition-colors duration-150 hover:bg-hover"
+                  className="group relative flex flex-col rounded-[var(--valk-radius-lg)] border border-subtle bg-surface p-5 transition-all duration-150 hover:border-medium hover:bg-hover"
                 >
-                  {/* Step number row */}
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
-                      {step.step}
-                    </span>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-[var(--valk-radius-sm)] border border-subtle bg-surface-alt transition-colors duration-150 group-hover:border-medium">
+                  {/* Icon + step number */}
+                  <div className="mb-5 flex items-start justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-[var(--valk-radius-md)] border border-subtle bg-surface-alt">
                       <Icon
-                        className="h-3.5 w-3.5 text-muted"
-                        strokeWidth={1.8}
+                        className="h-4.5 w-4.5 text-accent"
+                        strokeWidth={1.6}
                       />
                     </div>
+                    <span className="font-mono text-caption tabular-nums text-disabled">
+                      {step.step}
+                    </span>
                   </div>
 
                   {/* Text */}
-                  <div>
-                    <h3 className="mb-1.5 text-dense font-semibold text-primary">
-                      {step.title}
-                    </h3>
-                    <p className="text-caption text-secondary" style={{ lineHeight: 1.6 }}>
-                      {step.description}
-                    </p>
-                  </div>
-
-                  {/* Accent bottom strip — appears on hover */}
-                  <div
-                    className="absolute bottom-0 left-4 right-4 h-px rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-                    style={{ background: "var(--valk-accent)" }}
-                  />
+                  <h3 className="mb-2 text-body font-medium text-primary">
+                    {step.title}
+                  </h3>
+                  <p className="text-caption text-muted" style={{ lineHeight: 1.65 }}>
+                    {step.description}
+                  </p>
                 </motion.div>
               );
             })}

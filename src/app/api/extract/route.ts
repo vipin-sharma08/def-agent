@@ -91,6 +91,15 @@ export async function POST(request: Request) {
       } catch {
         detail = errText ? ` — ${errText.slice(0, 200)}` : "";
       }
+
+      // Surface 413 from N8N so the client can show a specific message
+      if (n8nResponse.status === 413) {
+        return NextResponse.json(
+          { error: `N8N webhook rejected the payload as too large (413). Try a smaller PDF.${detail}` },
+          { status: 413 }
+        );
+      }
+
       return NextResponse.json(
         {
           error: `Extraction service returned an error (HTTP ${n8nResponse.status})${detail}`,

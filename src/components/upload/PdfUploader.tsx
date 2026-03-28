@@ -36,6 +36,10 @@ function humanizeError(raw: string): string {
     return "The report is very large. Extraction timed out — please try a shorter report or try again.";
   }
 
+  if (lower.includes("n8n") && (lower.includes("413") || lower.includes("too large"))) {
+    return "The extraction service (N8N) rejected the PDF as too large. Please try a compressed or shorter report.";
+  }
+
   if (lower.includes("413") || lower.includes("payload too large") || lower.includes("body exceeded") || lower.includes("entity too large")) {
     return "The PDF is too large for the server to process. Please try a report under 3 MB, or use a compressed version.";
   }
@@ -167,11 +171,15 @@ export const PdfUploader = () => {
       const base64 = await toBase64(selectedFile);
 
       // Vercel serverless functions have a ~4.5 MB request body limit.
-      // Base64 encoding inflates size by ~33%, so warn early.
-      const estimatedPayloadMb = (base64.length * 1.02) / (1024 * 1024);
-      if (estimatedPayloadMb > 4.2) {
+      // The full JSON payload = base64 string + JSON wrapper + filename.
+      // Check against 4.3 MB to leave headroom.
+      const payloadBytes = new TextEncoder().encode(
+        JSON.stringify({ pdf: base64, filename: selectedFile.name })
+      ).byteLength;
+      const payloadMb = payloadBytes / (1024 * 1024);
+      if (payloadMb > 4.3) {
         throw new Error(
-          "413 — PDF payload too large for the server. Please try a compressed or shorter PDF (under ~3 MB)."
+          "413 — PDF payload too large for the server (${payloadMb.toFixed(1)} MB). Please try a compressed or shorter PDF (under ~3 MB)."
         );
       }
 

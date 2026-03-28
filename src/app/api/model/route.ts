@@ -1,96 +1,67 @@
-// src/app/api/model/route.ts
-// ═══════════════════════════════════════════════════════════════════
-// Proxy to N8N modelling webhook.
-// Accepts { extracted_data, assumptions } JSON body and returns
-// a FinancialModel. 3-minute timeout for complex models.
-// ═══════════════════════════════════════════════════════════════════
-
 import { NextResponse } from "next/server";
-import { MODELLING_SYSTEM_PROMPT } from "@/lib/prompts";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { MODELLING_SYSTEM_PROMPT, buildModellingUserMessage } from "@/lib/prompts";
 
-export const maxDuration = 180; // seconds — required for Vercel Pro/Enterprise timeout
-
-const TIMEOUT_MS = 180_000; // 3 minutes
-
-function unwrapModelPayload(raw: unknown): unknown {
-  if (Array.isArray(raw)) {
-    const first = raw[0];
-    if (first && typeof first === "object") {
-      const obj = first as Record<string, unknown>;
-      return obj.modelData ?? obj.model_data ?? obj;
-    }
-    return raw;
-  }
-
-  if (raw && typeof raw === "object") {
-    const obj = raw as Record<string, unknown>;
-    return obj.modelData ?? obj.model_data ?? obj;
-  }
-
-  return raw;
-}
+export const maxDuration = 180;
 
 export async function POST(request: Request) {
-  const webhookUrl = process.env.N8N_WEBHOOK_URL_MODEL;
-  if (!webhookUrl) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     return NextResponse.json(
-      { error: "N8N_WEBHOOK_URL_MODEL is not configured on the server." },
+      { error: "GEMINI_API_KEY is not configured on the server." },
       { status: 500 }
     );
   }
 
   let body: { extracted_data?: unknown; assumptions?: unknown };
   try {
-    body = await request.json() as { extracted_data?: unknown; assumptions?: unknown };
+    body = (await request.json()) as { extracted_data?: unknown; assumptions?: unknown };
+    if (!body.extracted_data || !body.assumptions) {
+      return NextResponse.json(
+        { error: "Missing required fields: extracted_data, assumptions" },
+        { status: 400 }
+      );
+    }
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
   try {
-    const n8nRes = await fetch(webhookUrl, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({
-        extracted_data: body.extracted_data,
-        assumptions:    body.assumptions,
-        system_prompt:  MODELLING_SYSTEM_PROMPT,
-      }),
-      signal:  controller.signal,
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: MODELLING_SYSTEM_PROMPT,
     });
 
-    clearTimeout(timeoutId);
+    const userMessage = buildModellingUserMessage(
+      body.extracted_data as object,
+      body.assumptions as object
+    );
 
-    if (!n8nRes.ok) {
-      let detail = "";
-      try {
-        const errBody = (await n8nRes.json()) as { message?: string };
-        detail = errBody.message ? ` — ${errBody.message}` : "";
-      } catch {
-        // Non-JSON error body; ignore
-      }
+    const result = await model.generateContent([{ text: userMessage }]);
+    const responseText = result.response.text();
+
+    // Strip markdown code fences if present
+    let jsonStr = responseText.trim();
+    if (jsonStr.startsWith("```")) {
+      jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+    }
+
+    let data: unknown;
+    try {
+      data = JSON.parse(jsonStr);
+    } catch {
+      console.error("[model] Gemini returned non-JSON:", responseText.slice(0, 500));
       return NextResponse.json(
-        { error: `Modelling service returned HTTP ${n8nRes.status}${detail}` },
+        { error: `Gemini returned invalid JSON. Preview: ${responseText.slice(0, 200)}` },
         { status: 502 }
       );
     }
 
-    const data: unknown = await n8nRes.json();
-    const unwrapped = unwrapModelPayload(data);
-    return NextResponse.json(unwrapped);
+    return NextResponse.json(data);
   } catch (err) {
-    clearTimeout(timeoutId);
-
-    if (err instanceof Error && err.name === "AbortError") {
-      return NextResponse.json(
-        { error: "Model generation timed out after 3 minutes. The service may be overloaded." },
-        { status: 504 }
-      );
-    }
-
     const message = err instanceof Error ? err.message : "Unexpected modelling error";
+    console.error("[model] Gemini error:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

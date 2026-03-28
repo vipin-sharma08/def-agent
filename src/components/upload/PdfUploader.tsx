@@ -65,14 +65,6 @@ function humanizeError(raw: string): string {
 
 const formatFileSize = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
-const toBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
-
 export const PdfUploader = () => {
   const router = useRouter();
   const { setPdfFile, setExtractedData, setStep, setLoading, setError } = useValkyrie();
@@ -168,25 +160,14 @@ export const PdfUploader = () => {
         // Proceed and let the API validate the file if needed.
       }
 
-      const base64 = await toBase64(selectedFile);
-
-      // Vercel serverless functions have a ~4.5 MB request body limit.
-      // The full JSON payload = base64 string + JSON wrapper + filename.
-      // Check against 4.3 MB to leave headroom.
-      const payloadBytes = new TextEncoder().encode(
-        JSON.stringify({ pdf: base64, filename: selectedFile.name })
-      ).byteLength;
-      const payloadMb = payloadBytes / (1024 * 1024);
-      if (payloadMb > 4.3) {
-        throw new Error(
-          "413 — PDF payload too large for the server (${payloadMb.toFixed(1)} MB). Please try a compressed or shorter PDF (under ~3 MB)."
-        );
-      }
+      // Send as FormData (multipart) to avoid base64 bloat (~33% overhead).
+      // A 3.7 MB PDF stays ~3.7 MB instead of becoming ~4.9 MB in JSON.
+      const formData = new FormData();
+      formData.append("pdf", selectedFile);
 
       const response = await fetch("/api/extract", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdf: base64, filename: selectedFile.name }),
+        body: formData,
       });
 
       // Parse response — handle non-JSON responses (e.g., Vercel HTML error pages)

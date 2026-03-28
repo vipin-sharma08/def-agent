@@ -15,22 +15,40 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── Parse request body ───────────────────────────────────────
+  // ── Parse request body (supports both FormData and JSON) ────
   let pdf: string;
   let filename: string;
+  const contentType = request.headers.get("content-type") ?? "";
+
   try {
-    const body = (await request.json()) as { pdf?: string; filename?: string };
-    if (!body.pdf) {
-      return NextResponse.json(
-        { error: "Missing required field: pdf (base64 string)" },
-        { status: 400 }
-      );
+    if (contentType.includes("multipart/form-data")) {
+      // FormData upload — file arrives as binary, convert to base64 server-side
+      const formData = await request.formData();
+      const file = formData.get("pdf");
+      if (!file || !(file instanceof Blob)) {
+        return NextResponse.json(
+          { error: "Missing required field: pdf (file upload)" },
+          { status: 400 }
+        );
+      }
+      const buffer = Buffer.from(await file.arrayBuffer());
+      pdf = buffer.toString("base64");
+      filename = (file instanceof File ? file.name : null) ?? "annual_report.pdf";
+    } else {
+      // Legacy JSON upload
+      const body = (await request.json()) as { pdf?: string; filename?: string };
+      if (!body.pdf) {
+        return NextResponse.json(
+          { error: "Missing required field: pdf (base64 string)" },
+          { status: 400 }
+        );
+      }
+      pdf = body.pdf;
+      filename = body.filename ?? "annual_report.pdf";
     }
-    pdf = body.pdf;
-    filename = body.filename ?? "annual_report.pdf";
   } catch {
     return NextResponse.json(
-      { error: "Invalid JSON body" },
+      { error: "Invalid request body" },
       { status: 400 }
     );
   }

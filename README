@@ -1,0 +1,3 @@
+# DCFagent
+FCFF DCF tool that ingests PDF annual reports and outputs intrinsic value with WACC, terminal-value, and growth-rate sensitivity tables. Cuts a 4-6 hour modeling task to under 5 min/company.
+Stack: Next.js, Claude API, Python
